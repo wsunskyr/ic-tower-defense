@@ -104,6 +104,7 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.menu = null;
     this.menuCell = null;
     this.menuKeys = {};
+    this.startLabel = '';
     this.pausePanel = null;
     this.codex = null;
     this.tweens.timeScale = 1;
@@ -182,9 +183,28 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.energyText.setText(`⚡ ${Math.floor(this.energy)}`);
     this.livesText.setText(`❤ ${this.lives}`);
     this.waveText.setText(`波次 ${this.waveIndex}/${this.level.waves.length}`);
+    this.refreshStartBtn();
+  }
+
+  /** 本波怪物已经全部出场、还有下一波时，可以提前开波 */
+  private get canCallEarly() {
+    return this.state === 'wave' && this.spawnQueue.length === 0 && this.waveIndex < this.level.waves.length;
+  }
+
+  /** 提前开波的额外奖励：场上剩下的怪越多，冒的险越大，奖励越多 */
+  private get earlyBonus() {
+    return Math.min(60, 15 + this.enemies.length * 3);
+  }
+
+  private startLabel = '';
+  private refreshStartBtn() {
     const canStart = this.state === 'build';
-    this.startBtn.setEnabled(canStart);
-    this.startBtn.setLabel(canStart ? `▶ 开始第 ${this.waveIndex + 1} 波` : '战斗中…');
+    const early = this.canCallEarly;
+    const label = canStart ? `▶ 开始第 ${this.waveIndex + 1} 波` : early ? `⏩ 提前 +⚡${waveBonus(this.waveIndex) + this.earlyBonus}` : '战斗中…';
+    if (label === this.startLabel) return;
+    this.startLabel = label;
+    this.startBtn.setEnabled(canStart || early);
+    this.startBtn.setLabel(label);
   }
 
   private toggleSpeed() {
@@ -323,6 +343,7 @@ export class GameScene extends Phaser.Scene implements Battle {
     } else if (k === 'p') this.togglePause();
     else if (this.paused) return;
     else if (k === 'f') this.toggleSpeed();
+    else if (k === 'n') this.startWave();
     else if (k === 'escape') this.closeMenu();
     else if (k >= '1' && k <= '9') this.menuKeys.build?.(Number(k) - 1);
     else if (k === 'u') this.menuKeys.upgrade?.();
@@ -512,7 +533,13 @@ export class GameScene extends Phaser.Scene implements Battle {
 
   private startWave() {
     const waves = this.level.waves;
-    if (this.state !== 'build' || this.waveIndex >= waves.length) return;
+    if (this.canCallEarly) {
+      // 提前开波：当前波的清波奖励立即发放，外加提前奖励
+      const bonus = waveBonus(this.waveIndex) + this.earlyBonus;
+      this.energy += bonus;
+      this.coinFly(this.startBtn.container.x, this.startBtn.container.y + 30, bonus);
+      this.floatText(this.startBtn.container.x, this.startBtn.container.y + 44, `提前开波 +⚡${bonus}`, '#ffe14d', 18);
+    } else if (this.state !== 'build' || this.waveIndex >= waves.length) return;
     const wave = waves[this.waveIndex];
     this.spawnQueue = [];
     let alt = 0;
@@ -586,6 +613,7 @@ export class GameScene extends Phaser.Scene implements Battle {
         const next = this.spawnQueue.shift()!;
         this.spawn(next.kind, next.path);
       }
+      this.refreshStartBtn();
     }
 
     for (const e of this.enemies) {
