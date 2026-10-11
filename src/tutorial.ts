@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { CELL, MAP_Y, WIDTH, HEIGHT, cellCenter } from './config/map';
-import { FONT, makeButton } from './ui';
+import { FONT, fit, makeButton } from './ui';
 import { finishTutorial } from './progress';
 
 /** 引导需要读取的战场状态，由 GameScene 提供 */
@@ -79,7 +79,9 @@ export class Tutorial {
     this.frame = scene.add.graphics();
     this.arrow = scene.add
       .text(0, 0, '▼', { fontFamily: 'Arial', fontSize: '28px', color: '#ffe14d', stroke: '#7a5200', strokeThickness: 5 })
-      .setOrigin(0.5, 1);
+      .setOrigin(0.5, 1)
+      // 引导箭头本来就要指着格子，不参与 UI 重叠检查
+      .setData('transient', true);
     this.bubble = scene.add.graphics();
     this.label = scene.add
       .text(WIDTH / 2, HEIGHT - 44, '', { fontFamily: FONT, fontSize: '18px', fontStyle: 'bold', color: '#ffffff' })
@@ -109,8 +111,10 @@ export class Tutorial {
 
     const text = `${this.step + 1}/${STEPS.length}  ${s.text(h)}`;
     if (this.label.text !== text) {
-      this.label.setText(text);
-      const w = this.label.width + 40;
+      // 气泡居中，右边不能碰到“跳过引导”按钮（左边缘 WIDTH-118）
+      const maxW = 2 * (WIDTH / 2 - 126) - 40;
+      fit(this.label.setText(text), maxW, { x: WIDTH / 2 - maxW / 2, y: HEIGHT - 66, w: maxW, h: 44 });
+      const w = this.label.displayWidth + 40;
       this.bubble.clear();
       this.bubble.fillStyle(0x000000, 0.25).fillRoundedRect(WIDTH / 2 - w / 2, HEIGHT - 66 + 3, w, 44, 22);
       this.bubble.fillStyle(0x2a6fb8, 0.96).fillRoundedRect(WIDTH / 2 - w / 2, HEIGHT - 66, w, 44, 22);

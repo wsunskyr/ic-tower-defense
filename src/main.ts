@@ -24,4 +24,5 @@ const game = new Phaser.Game({
 if (import.meta.env.DEV) {
   Object.assign(window, { __game: game, __sfx: sfx, __music: music });
   void import('./dev/bot').then((m) => m.installBot(game));
+  void import('./dev/uiAudit').then((m) => m.installUiAudit(game));
 }

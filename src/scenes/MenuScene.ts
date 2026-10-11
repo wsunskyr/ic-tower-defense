@@ -5,7 +5,7 @@ import { ENDLESS } from '../config/endless';
 import { TOWERS } from '../config/towers';
 import { drawLevelMap, placeProps } from '../mapRender';
 import { isUnlocked, starsOf, totalStars, hasBadge, isEndlessUnlocked, endlessBest, ENDLESS_UNLOCK_LEVEL } from '../progress';
-import { FONT, makeButton } from '../ui';
+import { FONT, fit, makeButton, type Box } from '../ui';
 import { openCodex } from '../codex';
 import { sfx, music } from '../audio';
 import { RES, setupCamera } from '../display';
@@ -82,6 +82,7 @@ export class MenuScene extends Phaser.Scene {
       .text(WIDTH / 2, HEIGHT - 30, text, { fontFamily: FONT, fontSize: '16px', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#2c3a52dd', padding: { x: 14, y: 8 } })
       .setOrigin(0.5)
       .setDepth(60000);
+    fit(t, WIDTH - 40);
     this.tweens.add({ targets: t, alpha: 0, delay: 1600, duration: 400, onComplete: () => t.destroy() });
   }
 
@@ -103,6 +104,9 @@ export class MenuScene extends Phaser.Scene {
       .text(WIDTH / 2 - pw / 2 + 180, y0 + 38, '全部塔可用 · 20 条命 · 每 10 波来 BOSS · 击败怪物和清波都会加分', { fontFamily: FONT, fontSize: '13px', color: '#8a6a4a' })
       .setOrigin(0, 0.5)
       .setDepth(30001);
+    // 说明文字夹在标题和关闭按钮之间
+    const tipR = WIDTH / 2 + pw / 2 - 60 - 45 - 12;
+    fit(tip, tipR - tip.x, { x: tip.x, y: y0, w: tipR - tip.x, h: 72 });
     parts.push(shade, g, title, tip);
     const close = () => {
       parts.forEach((o) => o.destroy());
@@ -159,19 +163,29 @@ export class MenuScene extends Phaser.Scene {
     // 右侧信息栏
     const rx = mx + MINI_W + 12;
     const right = CARD_W / 2 - 12;
-    container.add(
-      this.add.text(rx, my + 8, level.endless ? '无尽模式' : `第 ${level.id} 关`, { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#a08a5a' }).setOrigin(0, 0.5),
-    );
+    const card: Box = { x: -CARD_W / 2 + 8, y: -CARD_H / 2 + 4, w: CARD_W - 16, h: CARD_H - 8 };
+    /** 从 x 到 r 之间放一行字 */
+    const fitRow = <T extends Phaser.GameObjects.Text>(t: T, r = right) => fit(t, r - t.x, { x: t.x, y: card.y, w: r - t.x, h: card.h });
     const s = starsOf(level.id);
+    // 标题行：左边关卡号，右边星星和奖章
+    let headR = right;
     if (!level.endless) {
       const starText = this.add
         .text(right, my + 8, '★'.repeat(s) + '☆'.repeat(3 - s), { fontFamily: FONT, fontSize: '15px', color: s > 0 ? '#ffb300' : '#c9b99a' })
         .setOrigin(1, 0.5);
       container.add(starText);
-      if (hasBadge(level.id)) container.add(this.add.text(right - starText.width - 4, my + 8, '🏅', { fontSize: '15px' }).setOrigin(1, 0.5));
+      headR = right - starText.width - 4;
+      if (hasBadge(level.id)) {
+        const medal = this.add.text(headR, my + 8, '🏅', { fontSize: '15px' }).setOrigin(1, 0.5);
+        container.add(medal);
+        headR -= medal.width + 2;
+      }
     }
     container.add(
-      this.add.text(rx, my + 32, level.name, { fontFamily: FONT, fontSize: '17px', fontStyle: 'bold', color: '#4a3a1a' }).setOrigin(0, 0.5),
+      fitRow(this.add.text(rx, my + 8, level.endless ? '无尽模式' : `第 ${level.id} 关`, { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#a08a5a' }).setOrigin(0, 0.5), headR - 4),
+    );
+    container.add(
+      fitRow(this.add.text(rx, my + 32, level.name, { fontFamily: FONT, fontSize: '17px', fontStyle: 'bold', color: '#4a3a1a' }).setOrigin(0, 0.5)),
     );
     // 新解锁的塔；第 1 关显示两座基础塔
     const shown = level.unlock ? [level.unlock] : level.id === 1 ? level.towers : [];
@@ -186,35 +200,41 @@ export class MenuScene extends Phaser.Scene {
     });
     if (level.unlock) {
       container.add(
-        this.add
-          .text(rx + tagText.width + 36, tagY, TOWERS[level.unlock].name, { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#6b5a3a' })
-          .setOrigin(0, 0.5),
+        fitRow(
+          this.add
+            .text(rx + tagText.width + 36, tagY, TOWERS[level.unlock].name, { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#6b5a3a' })
+            .setOrigin(0, 0.5),
+        ),
       );
     }
     const boss = level.endless || level.waves.some((w) => w.some((grp) => grp.kind === 'esd'));
     const best = level.endless ? endlessBest(level.id) : null;
     const info = level.endless
       ? best
-        ? `最高 第 ${best.wave} 波 · ${best.score} 分`
+        ? `最高 ${best.wave} 波 · ${best.score} 分`
         : '还没有纪录'
       : `${level.waves.length} 波${level.paths.length > 1 ? ' · 双入口' : ''}${boss ? ' · BOSS' : ''}`;
     container.add(
-      this.add
-        .text(rx, my + 84, info, {
-          fontFamily: FONT, fontSize: '12px', fontStyle: level.endless ? 'bold' : 'normal', color: level.endless ? '#b0601a' : boss ? '#c6331f' : '#8a7a5a',
-        })
-        .setOrigin(0, 0.5),
+      fitRow(
+        this.add
+          .text(rx, my + 84, info, {
+            fontFamily: FONT, fontSize: '12px', fontStyle: level.endless ? 'bold' : 'normal', color: level.endless ? '#b0601a' : boss ? '#c6331f' : '#8a7a5a',
+          })
+          .setOrigin(0, 0.5),
+      ),
     );
     // 通关后底部改为显示可选挑战
     const ch = level.challenge;
     const showChallenge = ch && s > 0;
     const done = hasBadge(level.id);
     container.add(
-      this.add
-        .text(-CARD_W / 2 + 12, my + MINI_H + 15, showChallenge ? `${done ? '🏅 挑战完成' : '挑战'}：${challengeText(ch)}` : level.subtitle, {
-          fontFamily: FONT, fontSize: '12px', fontStyle: showChallenge ? 'bold' : 'normal', color: showChallenge ? (done ? '#b8860b' : '#8a5a2a') : '#8a7a5a',
-        })
-        .setOrigin(0, 0.5),
+      fitRow(
+        this.add
+          .text(-CARD_W / 2 + 12, my + MINI_H + 15, showChallenge ? `${done ? '🏅 挑战完成' : '挑战'}：${challengeText(ch)}` : level.subtitle, {
+            fontFamily: FONT, fontSize: '12px', fontStyle: showChallenge ? 'bold' : 'normal', color: showChallenge ? (done ? '#b8860b' : '#8a5a2a') : '#8a7a5a',
+          })
+          .setOrigin(0, 0.5),
+      ),
     );
 
     const zone = this.add.zone(0, 0, CARD_W, CARD_H).setInteractive({ useHandCursor: unlocked });
@@ -229,9 +249,9 @@ export class MenuScene extends Phaser.Scene {
       const ly = -CARD_H / 2 + 10 + MINI_H / 2;
       container.add(this.add.text(lx, ly - 10, '🔒', { fontSize: '30px' }).setOrigin(0.5));
       container.add(
-        this.add
+        fit(this.add
           .text(lx, ly + 24, level.endless ? `通关第 ${ENDLESS_UNLOCK_LEVEL} 关解锁` : '通过上一关解锁', { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#ffffff', stroke: '#3a3f4c', strokeThickness: 4 })
-          .setOrigin(0.5),
+          .setOrigin(0.5), MINI_W - 8),
       );
       zone.on('pointerdown', () => {
         sfx.play('deny');

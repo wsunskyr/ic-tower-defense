@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { WIDTH, HEIGHT } from './config/map';
 import { ENEMIES, ESD_DISCHARGE, type EnemyKind, type EnemyDef } from './config/enemies';
 import { hasSeen } from './progress';
-import { FONT, makeButton } from './ui';
+import { FONT, fit, makeButton, type Box } from './ui';
 import { sfx } from './audio';
 
 const ORDER: EnemyKind[] = ['thermal', 'glitch', 'crosstalk', 'flicker', 'jitter', 'emi', 'esd'];
@@ -98,21 +98,33 @@ export function openCodex(scene: Phaser.Scene, onClose?: () => void) {
     detail.add(big);
 
     const tx = dx + 210;
-    detail.add(
-      scene.add
-        .text(tx, dy + 40, seen ? d.name : '？？？', { fontFamily: FONT, fontSize: '30px', fontStyle: 'bold', color: d.boss && seen ? '#c6331f' : '#3a2a6a' })
-        .setOrigin(0, 0.5),
-    );
+    // 详情框内留 16 的边距，所有文字都不能出这个范围
+    const inner: Box = { x: dx + 16, y: dy + 8, w: dw - 32, h: ph - 106 - 16 };
+    const innerR = inner.x + inner.w;
+    const name = scene.add
+      .text(tx, dy + 40, seen ? d.name : '？？？', { fontFamily: FONT, fontSize: '30px', fontStyle: 'bold', color: d.boss && seen ? '#c6331f' : '#3a2a6a' })
+      .setOrigin(0, 0.5);
+    detail.add(name);
     if (d.boss && seen) {
-      detail.add(scene.add.text(tx + 140, dy + 40, 'BOSS', { fontFamily: 'Arial', fontSize: '15px', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#c6331f', padding: { x: 6, y: 3 } }).setOrigin(0, 0.5));
+      const tag = scene.add.text(0, dy + 40, 'BOSS', { fontFamily: 'Arial', fontSize: '15px', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#c6331f', padding: { x: 6, y: 3 } }).setOrigin(1, 0.5);
+      fit(name, innerR - tag.width - 10 - tx, inner);
+      tag.setX(Math.min(innerR, tx + name.displayWidth + 10 + tag.width));
+      detail.add(fit(tag, tag.width, inner));
+    } else {
+      fit(name, innerR - tx, inner);
     }
     if (!seen) {
       detail.add(
-        scene.add.text(tx, dy + 86, '还没有遇到过它。\n在关卡里第一次遭遇后解锁。', { fontFamily: FONT, fontSize: '16px', color: '#7a7090', lineSpacing: 6 }),
+        fit(scene.add.text(tx, dy + 86, '还没有遇到过它。\n在关卡里第一次遭遇后解锁。', { fontFamily: FONT, fontSize: '16px', color: '#7a7090', lineSpacing: 6 }), innerR - tx, inner),
       );
       return;
     }
-    detail.add(scene.add.text(tx, dy + 72, d.intro, { fontFamily: FONT, fontSize: '15px', color: '#5a4a7a', wordWrap: { width: dw - 230 } }));
+    // 简介在名字下面、数值条上面
+    detail.add(
+      fit(scene.add.text(tx, dy + 72, d.intro, { fontFamily: FONT, fontSize: '15px', color: '#5a4a7a', wordWrap: { width: innerR - tx } }), innerR - tx, {
+        x: tx, y: dy + 60, w: innerR - tx, h: 210 - 16 - 60,
+      }),
+    );
 
     // 数值条
     const bars: [string, number, number, string][] = [
@@ -131,18 +143,20 @@ export function openCodex(scene: Phaser.Scene, onClose?: () => void) {
       bar.fillStyle(0xddd3f5, 1).fillRoundedRect(dx + 104, by - 7, bw, 14, 7);
       bar.fillStyle(d.color, 1).fillRoundedRect(dx + 104, by - 7, Math.max(14, bw * k), 14, 7);
       detail.add(bar);
-      detail.add(scene.add.text(dx + 104 + bw + 12, by, label, { fontFamily: FONT, fontSize: '14px', fontStyle: 'bold', color: '#3a2a6a' }).setOrigin(0, 0.5));
+      detail.add(fit(scene.add.text(dx + 104 + bw + 12, by, label, { fontFamily: FONT, fontSize: '14px', fontStyle: 'bold', color: '#3a2a6a' }).setOrigin(0, 0.5), innerR - (dx + 104 + bw + 12), inner));
     });
 
-    let y = dy + 350;
+    // 下面几段按实际高度往下排，换行多了也不会互相压住
+    let y = dy + 336;
+    const para = (text: string, style: Phaser.Types.GameObjects.Text.TextStyle) => {
+      const p = scene.add.text(dx + 24, y, text, { fontFamily: FONT, fontSize: '14px', ...style, wordWrap: { width: dw - 48 } });
+      detail.add(fit(p, dw - 48, inner));
+      y += p.displayHeight + 8;
+    };
     const t = traits(d);
-    if (t.length) {
-      detail.add(scene.add.text(dx + 24, y, `特性：${t.join('，')}`, { fontFamily: FONT, fontSize: '14px', color: '#c6331f', fontStyle: 'bold', wordWrap: { width: dw - 48 } }));
-      y += 28;
-    }
-    detail.add(scene.add.text(dx + 24, y, `应对：${COUNTERS[kind]}`, { fontFamily: FONT, fontSize: '14px', color: '#2f7a4a', fontStyle: 'bold', wordWrap: { width: dw - 48 } }));
-    y += 28;
-    detail.add(scene.add.text(dx + 24, y, `电路里的它：${d.info ?? FLAVOR[kind]}`, { fontFamily: FONT, fontSize: '13px', color: '#8a7aa0', wordWrap: { width: dw - 48 } }));
+    if (t.length) para(`特性：${t.join('，')}`, { color: '#c6331f', fontStyle: 'bold' });
+    para(`应对：${COUNTERS[kind]}`, { color: '#2f7a4a', fontStyle: 'bold' });
+    para(`电路里的它：${d.info ?? FLAVOR[kind]}`, { fontSize: '13px', color: '#8a7aa0' });
   };
 
   ORDER.forEach((kind, i) => {
@@ -163,6 +177,7 @@ export function openCodex(scene: Phaser.Scene, onClose?: () => void) {
     const name = scene.add
       .text(cx, cy + 38, seen ? ENEMIES[kind].name : '？？？', { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#4a3a6a' })
       .setOrigin(0.5);
+    fit(name, cell - 12, { x: cx - cell / 2 + 6, y: cy - cell / 2, w: cell - 12, h: cell });
     const zone = scene.add.zone(cx, cy, cell, cell).setInteractive({ useHandCursor: true });
     zone.on('pointerdown', () => {
       sfx.play('click');

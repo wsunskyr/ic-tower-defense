@@ -72,7 +72,7 @@ export class Tower {
     this.base = scene.add.graphics().setDepth(y - 1);
     this.sprite = scene.add.image(x, y - 4, kind).setDepth(y);
     this.stars = scene.add
-      .text(x, y + 26, '', { fontFamily: 'Arial', fontSize: '13px', color: '#ffd23f', stroke: '#7a5200', strokeThickness: 3 })
+      .text(x, y + 22, '', { fontFamily: 'Arial', fontSize: '13px', color: '#ffd23f', stroke: '#7a5200', strokeThickness: 3 })
       .setOrigin(0.5)
       .setDepth(y + 1);
     this.stunIcon = scene.add
@@ -137,6 +137,8 @@ export class Tower {
       duration: 110,
       ease: 'Quad.In',
       onComplete: () => {
+        // 升级后立刻卖掉时塔已经销毁
+        if (!this.sprite.active) return;
         this.sprite.setTexture(towerTexture(this.kind, this.level));
         const nsc = this.scale;
         this.sprite.setScale(nsc * 1.35, nsc * 0.75);
@@ -415,6 +417,7 @@ export class Tower {
   }
 
   destroy() {
+    this.battle.stage.tweens.killTweensOf(this.sprite);
     this.sprite.destroy();
     this.stars.destroy();
     this.fx.destroy();

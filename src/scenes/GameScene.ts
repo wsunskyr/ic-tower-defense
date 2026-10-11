@@ -11,7 +11,7 @@ import { ENEMIES, ESD_DISCHARGE, type EnemyKind } from '../config/enemies';
 import { waveBonus } from '../config/waves';
 import { Enemy } from '../entities/Enemy';
 import { Tower, towerTexture, type Battle } from '../entities/Tower';
-import { FONT, makeButton, type Button } from '../ui';
+import { FONT, fit, makeButton, measureMax, type Button } from '../ui';
 import { sfx, music, type SfxName } from '../audio';
 import { setupCamera } from '../display';
 
@@ -29,6 +29,10 @@ interface Projectile {
 }
 
 const PROJECTILE_SPEED = 520;
+// HUD 标题可用的横向范围：波次胶囊右边（268+150）到 ☰ 按钮左边（WIDTH-436-24）
+const TITLE_L = 268 + 150 + 8;
+const TITLE_R = WIDTH - 436 - 24 - 8;
+const BUILD_TIP = '选择一座防御塔（数字键快速建造）';
 
 export class GameScene extends Phaser.Scene implements Battle {
   // 战场状态（scene.restart 不会重新执行构造函数，因此在 create 里初始化）
@@ -202,7 +206,7 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.waveText = this.add.text(284, 32, '', style).setOrigin(0, 0.5).setDepth(20001);
 
     this.titleText = this.add
-      .text(WIDTH / 2 - 26, 32, '', { fontFamily: FONT, fontSize: '18px', color: '#9fc3ff', fontStyle: 'bold' })
+      .text((TITLE_L + TITLE_R) / 2, 32, '', { fontFamily: FONT, fontSize: '18px', color: '#9fc3ff', fontStyle: 'bold' })
       .setOrigin(0.5)
       .setDepth(20001);
 
@@ -220,11 +224,15 @@ export class GameScene extends Phaser.Scene implements Battle {
   }
 
   private refreshHud() {
-    this.energyText.setText(`⚡ ${Math.floor(this.energy)}`);
-    this.livesText.setText(`❤ ${this.lives}`);
-    this.waveText.setText(`波次 ${this.waveIndex}/${this.level.endless ? '∞' : this.level.waves.length}`);
+    // 文字框 = 胶囊左边 16 的位置到胶囊右边留 10
+    const hud = (t: Phaser.GameObjects.Text, s: string, pillX: number, pillW: number) =>
+      fit(t.setText(s), pillX + pillW - 10 - t.x, { x: t.x, y: 14, w: pillX + pillW - 10 - t.x, h: 36 });
+    hud(this.energyText, `⚡ ${Math.floor(this.energy)}`, 14, 130);
+    hud(this.livesText, `❤ ${this.lives}`, 156, 100);
+    hud(this.waveText, `波次 ${this.waveIndex}/${this.level.endless ? '∞' : this.level.waves.length}`, 268, 150);
     // 无尽模式标题栏只放分数，地图名在开局横幅里已经展示过
     this.titleText.setText(this.level.endless ? `🏆 ${this.score} 分` : `第${this.level.id}关 ${this.level.name}`);
+    fit(this.titleText, TITLE_R - TITLE_L, { x: TITLE_L, y: 10, w: TITLE_R - TITLE_L, h: 44 });
     this.refreshStartBtn();
   }
 
@@ -417,7 +425,14 @@ export class GameScene extends Phaser.Scene implements Battle {
     const kinds = TOWER_ORDER.filter((k) => this.level.towers.includes(k));
     const n = kinds.length;
     const gap = 70;
-    const panelW = n * gap + 20;
+    // 面板宽度按最长的说明文字来定，文字不会超出面板
+    const infoStyle = { fontFamily: FONT, fontSize: '14px' };
+    const statStyle = { fontFamily: FONT, fontSize: '12px', fontStyle: 'bold' };
+    const textW = Math.max(
+      measureMax(this, [BUILD_TIP, '能量不足！', ...kinds.map((k) => `${TOWERS[k].name}：${TOWERS[k].desc}（再点一次建造）`)], infoStyle),
+      measureMax(this, kinds.map((k) => statText(k, 0)), statStyle),
+    );
+    const panelW = Math.min(WIDTH - 12, Math.max(n * gap + 20, Math.ceil(textW) + 32));
     const panelH = 148;
     const px = Phaser.Math.Clamp(center.x, panelW / 2 + 6, WIDTH - panelW / 2 - 6);
     const above = center.y - CELL / 2 - panelH - 8 > MAP_Y;
@@ -434,15 +449,19 @@ export class GameScene extends Phaser.Scene implements Battle {
     container.add(g);
 
     const info = this.add
-      .text(px, py + panelH / 2 - 38, '选择一座防御塔（数字键快速建造）', { fontFamily: FONT, fontSize: '14px', color: '#6b5a3a' })
+      .text(px, py + panelH / 2 - 38, '', { ...infoStyle, color: '#6b5a3a' })
       .setOrigin(0.5);
     const stat = this.add
-      .text(px, py + panelH / 2 - 17, '', { fontFamily: FONT, fontSize: '12px', fontStyle: 'bold', color: '#2a6fb8' })
+      .text(px, py + panelH / 2 - 17, '', { ...statStyle, color: '#2a6fb8' })
       .setOrigin(0.5);
     container.add([info, stat]);
+    const textBox = { x: px - panelW / 2 + 12, y: py - panelH / 2, w: panelW - 24, h: panelH };
+    const setInfo = (t: string) => fit(info.setText(t), textBox.w, textBox);
+    const setStat = (t: string) => fit(stat.setText(t), textBox.w, textBox);
+    setInfo(BUILD_TIP);
     const tryBuild = (kind: TowerKind) => {
       if (this.energy < TOWERS[kind].levels[0].cost) {
-        info.setText('能量不足！');
+        setInfo('能量不足！');
         sfx.play('deny');
         return;
       }
@@ -469,8 +488,8 @@ export class GameScene extends Phaser.Scene implements Battle {
       }
       bg.setInteractive({ useHandCursor: afford });
       const preview = () => {
-        info.setText(`${def.name}：${def.desc}`);
-        stat.setText(statText(kind, 0));
+        setInfo(`${def.name}：${def.desc}`);
+        setStat(statText(kind, 0));
         if (afford) icon.setScale(52 / icon.width);
       };
       bg.on('pointerover', preview);
@@ -482,7 +501,7 @@ export class GameScene extends Phaser.Scene implements Battle {
           preview();
           picks.forEach((b) => b.setStrokeStyle(3, 0x5fb0ff));
           bg.setStrokeStyle(5, 0xff9d2e);
-          info.setText(`${def.name}：${def.desc}（再点一次建造）`);
+          setInfo(`${def.name}：${def.desc}（再点一次建造）`);
           return;
         }
         tryBuild(kind);
@@ -522,14 +541,17 @@ export class GameScene extends Phaser.Scene implements Battle {
         align: 'center', lineSpacing: 3,
       })
       .setOrigin(0.5);
+    fit(label, WIDTH - 8);
     // 靠边时整体挪回屏幕内
-    label.setX(Phaser.Math.Clamp(tower.x, label.width / 2 + 4, WIDTH - label.width / 2 - 4));
+    label.setX(Phaser.Math.Clamp(tower.x, label.displayWidth / 2 + 4, WIDTH - label.displayWidth / 2 - 4));
     container.add(label);
 
     const upY = Math.max(tower.y - 62, MAP_Y + 22);
     const sellY = Math.min(tower.y + 62, HEIGHT - 22);
+    // 最边上一列的塔，按钮往里挪，不出画面
+    const bx = Phaser.Math.Clamp(tower.x, 64, WIDTH - 64);
     if (tower.maxed) {
-      const b = makeButton(this, tower.x, upY, 110, 36, '已满级', 0x8a8f99, () => {}, 15);
+      const b = makeButton(this, bx, upY, 110, 36, '已满级', 0x8a8f99, () => {}, 15);
       b.setEnabled(false);
       container.add(b.container);
     } else {
@@ -549,26 +571,27 @@ export class GameScene extends Phaser.Scene implements Battle {
         this.closeMenu();
         this.openTowerMenu(tower);
       };
-      const b = makeButton(this, tower.x, upY, 120, 36, `升级 ⚡${cost} [U]`, 0x3cb35a, doUpgrade, 14);
+      const b = makeButton(this, bx, upY, 120, 36, `升级 ⚡${cost} [U]`, 0x3cb35a, doUpgrade, 14);
       this.menuKeys.upgrade = doUpgrade;
       b.setEnabled(this.energy >= cost);
       container.add(b.container);
       // 下一级造型预览
-      const right = tower.x + 116 < WIDTH;
-      const px = right ? tower.x + 86 : tower.x - 86;
+      // 预览放在按钮旁边，箭头和按钮之间留出空隙
+      const right = bx + 124 < WIDTH;
+      const px = right ? bx + 96 : bx - 96;
       const preview = this.add.circle(px, upY, 22, 0xfffaf0).setStrokeStyle(3, 0x3cb35a);
       const icon = this.add.image(px, upY, towerTexture(tower.kind, tower.level + 1));
       icon.setScale(36 / icon.width);
-      const arrow = this.add.text(right ? px - 30 : px + 30, upY, right ? '›' : '‹', { fontFamily: 'Arial', fontSize: '22px', fontStyle: 'bold', color: '#ffffff', stroke: '#2f8f5a', strokeThickness: 4 }).setOrigin(0.5);
+      const arrow = this.add.text(right ? px - 28 : px + 28, upY, right ? '›' : '‹', { fontFamily: 'Arial', fontSize: '22px', fontStyle: 'bold', color: '#ffffff', stroke: '#2f8f5a', strokeThickness: 4 }).setOrigin(0.5);
       container.add([arrow, preview, icon]);
       this.tweens.add({ targets: icon, scale: icon.scale * 1.12, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
     }
-    const sell = makeButton(this, tower.x, sellY, 120, 36, `出售 +${tower.sellValue} [S]`, 0xe0533a, () => this.sell(tower), 14);
+    const sell = makeButton(this, bx, sellY, 120, 36, `出售 +${tower.sellValue} [S]`, 0xe0533a, () => this.sell(tower), 14);
     this.menuKeys.sell = () => this.sell(tower);
     container.add(sell.container);
 
     label.setY(upY - 42);
-    if (label.y - label.height / 2 < MAP_Y + 4) label.setY(sellY + 42);
+    if (label.y - label.displayHeight / 2 < MAP_Y + 4) label.setY(sellY + 42);
 
     container.setAlpha(0);
     this.tweens.add({ targets: container, alpha: 1, duration: 120 });
@@ -812,6 +835,7 @@ export class GameScene extends Phaser.Scene implements Battle {
             fontFamily: 'Courier New', fontSize: `${20 + tower.level * 2}px`, fontStyle: 'bold', color: css, stroke: '#1d2a3a', strokeThickness: 4,
           })
           .setOrigin(0.5)
+          .setData('transient', true)
       : this.add.circle(sx, sy, 7 + tower.level * 1.5, color).setStrokeStyle(3, Phaser.Display.Color.ValueToColor(color).darken(30).color);
     obj.setDepth(12000);
     this.projectiles.push({ obj, tower, target, damage: tower.stats.damage, trail: 0 });
@@ -921,7 +945,8 @@ export class GameScene extends Phaser.Scene implements Battle {
       })
       .setOrigin(0.5)
       .setDepth(14000)
-      .setScale(big ? 1.5 : 1.2);
+      .setScale(big ? 1.5 : 1.2)
+      .setData('transient', true);
     this.damageTexts++;
     this.tweens.add({ targets: t, scale: 1, duration: 90, ease: 'Back.Out' });
     this.tweens.add({
@@ -1038,6 +1063,7 @@ export class GameScene extends Phaser.Scene implements Battle {
     g: Phaser.GameObjects.Graphics,
     title: Phaser.GameObjects.Text,
     coreImg: Phaser.GameObjects.Image,
+    panelText: (t: Phaser.GameObjects.Text) => void,
   ) {
     const prev = endlessBest(this.level.id);
     const record = recordEndless(this.level.id, this.waveIndex, this.score);
@@ -1050,6 +1076,8 @@ export class GameScene extends Phaser.Scene implements Battle {
         fontFamily: FONT, fontSize: '16px', fontStyle: 'bold', color: record ? '#c6331f' : '#6b5a3a',
       })
       .setOrigin(0.5);
+    panelText(score);
+    panelText(best);
     coreImg.setPosition(WIDTH / 2, HEIGHT / 2 + 56).setTint(0x777777).setAngle(-15);
     const buttons = [
       makeButton(this, WIDTH / 2 - 70, HEIGHT / 2 + 118, 120, 46, '选关', 0x5c6b85, () => this.scene.start('Menu'), 18),
@@ -1064,7 +1092,8 @@ export class GameScene extends Phaser.Scene implements Battle {
     const t = this.add
       .text(x, y, text, { fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color, stroke: '#00000088', strokeThickness: 4 })
       .setOrigin(0.5)
-      .setDepth(14000);
+      .setDepth(14000)
+      .setData('transient', true);
     this.tweens.add({ targets: t, y: y - 30, alpha: 0, duration: 800, ease: 'Cubic.Out', onComplete: () => t.destroy() });
   }
 
@@ -1075,7 +1104,10 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.banners.forEach((b, i) => b.setY(MAP_Y + 46 + i * 52));
     const y = MAP_Y + 40 + this.banners.length * 52;
     const label = this.add.text(icon ? 22 : 0, 0, text, { fontFamily: FONT, fontSize: '18px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5);
-    const w = label.width + (icon ? 84 : 48);
+    // 横幅最宽到画面两侧各留 20，文字太长就缩小
+    const extra = icon ? 84 : 48;
+    fit(label, WIDTH - 40 - extra);
+    const w = label.displayWidth + extra;
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.2).fillRoundedRect(-w / 2, -19 + 3, w, 38, 19);
     g.fillStyle(color, 0.95).fillRoundedRect(-w / 2, -19, w, 38, 19);
@@ -1115,12 +1147,14 @@ export class GameScene extends Phaser.Scene implements Battle {
     g.fillStyle(0xfffaf0, 1).fillRoundedRect(WIDTH / 2 - 220, HEIGHT / 2 - 150, 440, 300, 28);
     g.lineStyle(5, won ? 0x3cb35a : 0xc6331f, 1).strokeRoundedRect(WIDTH / 2 - 220, HEIGHT / 2 - 150, 440, 300, 28);
     const coreImg0 = () => this.add.image(WIDTH / 2, HEIGHT / 2 + 40, 'core').setScale(60 / this.core.width);
+    const panelText = <T extends Phaser.GameObjects.Text>(t: T) => fit(t, 400, { x: WIDTH / 2 - 200, y: HEIGHT / 2 - 150, w: 400, h: 300 });
     const title = this.add
       .text(WIDTH / 2, HEIGHT / 2 - 100, won ? '芯片守住了！' : this.level.endless ? `坚持到第 ${this.waveIndex} 波` : '芯片失效了…', { fontFamily: FONT, fontSize: '36px', fontStyle: 'bold', color: won ? '#2f8f5a' : '#c6331f' })
       .setOrigin(0.5);
+    panelText(title);
     this.tutorial?.finish();
     if (this.level.endless) {
-      this.finishEndless(layer, shade, g, title, coreImg0());
+      this.finishEndless(layer, shade, g, title, coreImg0(), panelText);
       return;
     }
     const max = this.level.lives;
@@ -1136,15 +1170,18 @@ export class GameScene extends Phaser.Scene implements Battle {
         fontFamily: FONT, fontSize: won ? '52px' : '22px', color: won ? '#ffc21f' : '#6b5a3a', stroke: won ? '#a87400' : '#00000000', strokeThickness: won ? 4 : 0,
       })
       .setOrigin(0.5);
+    panelText(stars);
     const coreImg = coreImg0().setY(HEIGHT / 2 + 40);
     if (!won) coreImg.setTint(0x777777).setAngle(-15);
     if (won && ch) {
       layer.add(
-        this.add
-          .text(WIDTH / 2, HEIGHT / 2 + 82, `${badge ? '🏅 挑战完成' : '挑战未完成'}：${challengeText(ch)}`, {
-            fontFamily: FONT, fontSize: '14px', fontStyle: 'bold', color: badge ? '#b8860b' : '#9a8a6a',
-          })
-          .setOrigin(0.5),
+        panelText(
+          this.add
+            .text(WIDTH / 2, HEIGHT / 2 + 82, `${badge ? '🏅 挑战完成' : '挑战未完成'}：${challengeText(ch)}`, {
+              fontFamily: FONT, fontSize: '14px', fontStyle: 'bold', color: badge ? '#b8860b' : '#9a8a6a',
+            })
+            .setOrigin(0.5),
+        ),
       );
     }
     const idx = LEVELS.findIndex((l) => l.id === this.level.id);
