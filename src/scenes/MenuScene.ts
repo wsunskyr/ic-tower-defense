@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { MAP_Y, WIDTH, HEIGHT, cellCenter } from '../config/map';
-import { LEVELS, type LevelDef } from '../config/levels';
+import { LEVELS, challengeText, type LevelDef } from '../config/levels';
+import { ENDLESS } from '../config/endless';
 import { TOWERS } from '../config/towers';
 import { drawLevelMap, placeProps } from '../mapRender';
-import { isUnlocked, starsOf, totalStars } from '../progress';
+import { isUnlocked, starsOf, totalStars, hasBadge, isEndlessUnlocked, endlessBest, ENDLESS_UNLOCK_LEVEL } from '../progress';
 import { FONT, makeButton } from '../ui';
 import { openCodex } from '../codex';
 import { sfx, music } from '../audio';
@@ -49,7 +50,23 @@ export class MenuScene extends Phaser.Scene {
     }, 16);
     const onOff = (on: boolean) => (on ? '♪ 音乐 开' : '♪ 音乐 关');
     const musicBtn = makeButton(this, WIDTH - 90, 92, 130, 38, onOff(music.enabled), 0x5c6b85, () => musicBtn.setLabel(onOff(music.toggle())), 15);
-    this.input.keyboard?.on('keydown-ESC', () => codex?.close());
+    this.input.keyboard?.on('keydown-ESC', () => {
+      codex?.close();
+      endless?.close();
+    });
+
+    // 左上角：无尽模式
+    let endless: { close: () => void } | null = null;
+    const open = isEndlessUnlocked();
+    const endlessBtn = makeButton(this, 90, 40, 130, 42, open ? '∞ 无尽模式' : '🔒 无尽模式', open ? 0xd0782a : 0x8a8f99, () => {
+      if (!open) {
+        sfx.play('deny');
+        this.toast(`通关第 ${ENDLESS_UNLOCK_LEVEL} 关后开放无尽模式`);
+        return;
+      }
+      endless = this.openEndless(() => (endless = null));
+    }, 16);
+    void endlessBtn;
 
     const gap = 18;
     const x0 = (WIDTH - (3 * CARD_W + 2 * gap)) / 2;
@@ -60,8 +77,50 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
+  private toast(text: string) {
+    const t = this.add
+      .text(WIDTH / 2, HEIGHT - 30, text, { fontFamily: FONT, fontSize: '16px', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#2c3a52dd', padding: { x: 14, y: 8 } })
+      .setOrigin(0.5)
+      .setDepth(60000);
+    this.tweens.add({ targets: t, alpha: 0, delay: 1600, duration: 400, onComplete: () => t.destroy() });
+  }
+
+  /** 无尽模式选图：三张横向卡片 */
+  private openEndless(onClose: () => void) {
+    const parts: Phaser.GameObjects.GameObject[] = [];
+    const shade = this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0x000000, 0.55).setInteractive().setDepth(30000);
+    const g = this.add.graphics().setDepth(30000);
+    const pw = 1000;
+    const ph = 300;
+    const y0 = HEIGHT / 2 - ph / 2;
+    g.fillStyle(0xfff4e6, 1).fillRoundedRect(WIDTH / 2 - pw / 2, y0, pw, ph, 26);
+    g.lineStyle(5, 0xd0782a, 1).strokeRoundedRect(WIDTH / 2 - pw / 2, y0, pw, ph, 26);
+    const title = this.add
+      .text(WIDTH / 2 - pw / 2 + 28, y0 + 36, '∞ 无尽模式', { fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: '#b0601a' })
+      .setOrigin(0, 0.5)
+      .setDepth(30001);
+    const tip = this.add
+      .text(WIDTH / 2 - pw / 2 + 180, y0 + 38, '全部塔可用 · 20 条命 · 每 10 波来 BOSS · 击败怪物和清波都会加分', { fontFamily: FONT, fontSize: '13px', color: '#8a6a4a' })
+      .setOrigin(0, 0.5)
+      .setDepth(30001);
+    parts.push(shade, g, title, tip);
+    const close = () => {
+      parts.forEach((o) => o.destroy());
+      onClose();
+    };
+    const closeBtn = makeButton(this, WIDTH / 2 + pw / 2 - 60, y0 + 36, 90, 38, '关闭', 0xd0782a, () => close(), 16);
+    closeBtn.container.setDepth(30001);
+    parts.push(closeBtn.container);
+    const gap = 18;
+    const x0 = (WIDTH - (3 * CARD_W + 2 * gap)) / 2;
+    ENDLESS.forEach((level, i) => {
+      parts.push(this.card(level, x0 + i * (CARD_W + gap), y0 + 86).setDepth(30001));
+    });
+    return { close };
+  }
+
   private card(level: LevelDef, x: number, y: number) {
-    const unlocked = isUnlocked(level.id);
+    const unlocked = level.endless ? isEndlessUnlocked() : isUnlocked(level.id);
     const cx = x + CARD_W / 2;
     const cy = y + CARD_H / 2;
     const container = this.add.container(cx, cy);
@@ -101,14 +160,16 @@ export class MenuScene extends Phaser.Scene {
     const rx = mx + MINI_W + 12;
     const right = CARD_W / 2 - 12;
     container.add(
-      this.add.text(rx, my + 8, `第 ${level.id} 关`, { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#a08a5a' }).setOrigin(0, 0.5),
+      this.add.text(rx, my + 8, level.endless ? '无尽模式' : `第 ${level.id} 关`, { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#a08a5a' }).setOrigin(0, 0.5),
     );
     const s = starsOf(level.id);
-    container.add(
-      this.add
+    if (!level.endless) {
+      const starText = this.add
         .text(right, my + 8, '★'.repeat(s) + '☆'.repeat(3 - s), { fontFamily: FONT, fontSize: '15px', color: s > 0 ? '#ffb300' : '#c9b99a' })
-        .setOrigin(1, 0.5),
-    );
+        .setOrigin(1, 0.5);
+      container.add(starText);
+      if (hasBadge(level.id)) container.add(this.add.text(right - starText.width - 4, my + 8, '🏅', { fontSize: '15px' }).setOrigin(1, 0.5));
+    }
     container.add(
       this.add.text(rx, my + 32, level.name, { fontFamily: FONT, fontSize: '17px', fontStyle: 'bold', color: '#4a3a1a' }).setOrigin(0, 0.5),
     );
@@ -130,17 +191,29 @@ export class MenuScene extends Phaser.Scene {
           .setOrigin(0, 0.5),
       );
     }
-    const boss = level.waves.some((w) => w.some((grp) => grp.kind === 'esd'));
+    const boss = level.endless || level.waves.some((w) => w.some((grp) => grp.kind === 'esd'));
+    const best = level.endless ? endlessBest(level.id) : null;
+    const info = level.endless
+      ? best
+        ? `最高 第 ${best.wave} 波 · ${best.score} 分`
+        : '还没有纪录'
+      : `${level.waves.length} 波${level.paths.length > 1 ? ' · 双入口' : ''}${boss ? ' · BOSS' : ''}`;
     container.add(
       this.add
-        .text(rx, my + 84, `${level.waves.length} 波${level.paths.length > 1 ? ' · 双入口' : ''}${boss ? ' · BOSS' : ''}`, {
-          fontFamily: FONT, fontSize: '12px', color: boss ? '#c6331f' : '#8a7a5a',
+        .text(rx, my + 84, info, {
+          fontFamily: FONT, fontSize: '12px', fontStyle: level.endless ? 'bold' : 'normal', color: level.endless ? '#b0601a' : boss ? '#c6331f' : '#8a7a5a',
         })
         .setOrigin(0, 0.5),
     );
+    // 通关后底部改为显示可选挑战
+    const ch = level.challenge;
+    const showChallenge = ch && s > 0;
+    const done = hasBadge(level.id);
     container.add(
       this.add
-        .text(-CARD_W / 2 + 12, my + MINI_H + 15, level.subtitle, { fontFamily: FONT, fontSize: '12px', color: '#8a7a5a' })
+        .text(-CARD_W / 2 + 12, my + MINI_H + 15, showChallenge ? `${done ? '🏅 挑战完成' : '挑战'}：${challengeText(ch)}` : level.subtitle, {
+          fontFamily: FONT, fontSize: '12px', fontStyle: showChallenge ? 'bold' : 'normal', color: showChallenge ? (done ? '#b8860b' : '#8a5a2a') : '#8a7a5a',
+        })
         .setOrigin(0, 0.5),
     );
 
@@ -157,14 +230,14 @@ export class MenuScene extends Phaser.Scene {
       container.add(this.add.text(lx, ly - 10, '🔒', { fontSize: '30px' }).setOrigin(0.5));
       container.add(
         this.add
-          .text(lx, ly + 24, '通过上一关解锁', { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#ffffff', stroke: '#3a3f4c', strokeThickness: 4 })
+          .text(lx, ly + 24, level.endless ? `通关第 ${ENDLESS_UNLOCK_LEVEL} 关解锁` : '通过上一关解锁', { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#ffffff', stroke: '#3a3f4c', strokeThickness: 4 })
           .setOrigin(0.5),
       );
       zone.on('pointerdown', () => {
         sfx.play('deny');
         this.tweens.add({ targets: container, x: cx + 6, duration: 50, yoyo: true, repeat: 2 });
       });
-      return;
+      return container;
     }
 
     zone.on('pointerover', () => this.tweens.add({ targets: container, scale: 1.04, duration: 120 }));
@@ -173,5 +246,6 @@ export class MenuScene extends Phaser.Scene {
       sfx.play('click');
       this.scene.start('Game', { levelId: level.id });
     });
+    return container;
   }
 }

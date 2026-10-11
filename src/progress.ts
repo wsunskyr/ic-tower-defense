@@ -9,15 +9,21 @@ interface Save {
   stars: Stars;
   /** 图鉴：遇到过的怪物 */
   seen: string[];
+  /** 完成挑战的关卡 */
+  badges: number[];
+  /** 无尽模式最好成绩 */
+  endless: Record<number, { wave: number; score: number }>;
+  /** 新手引导已完成 */
+  tutorial: boolean;
 }
 
 function load(): Save {
   try {
     const raw = localStorage.getItem(KEY);
     const data = raw ? (JSON.parse(raw) as Partial<Save>) : null;
-    return { stars: data?.stars ?? {}, seen: data?.seen ?? [] };
+    return { stars: data?.stars ?? {}, seen: data?.seen ?? [], badges: data?.badges ?? [], endless: data?.endless ?? {}, tutorial: data?.tutorial ?? false };
   } catch {
-    return { stars: {}, seen: [] };
+    return { stars: {}, seen: [], badges: [], endless: {}, tutorial: false };
   }
 }
 
@@ -63,5 +69,43 @@ export function hasSeen(kind: string) {
 export function markSeen(kind: string) {
   if (save.seen.includes(kind)) return;
   save = { ...save, seen: [...save.seen, kind] };
+  persist();
+}
+
+export function hasBadge(id: number) {
+  return save.badges.includes(id);
+}
+
+export function recordBadge(id: number) {
+  if (hasBadge(id)) return;
+  save = { ...save, badges: [...save.badges, id] };
+  persist();
+}
+
+/** 无尽模式在通关第 4 关后开放 */
+export const ENDLESS_UNLOCK_LEVEL = 4;
+export function isEndlessUnlocked() {
+  return UNLOCK_ALL || starsOf(ENDLESS_UNLOCK_LEVEL) > 0;
+}
+
+export function endlessBest(id: number) {
+  return save.endless[id] ?? null;
+}
+
+/** 返回是否刷新了最高分 */
+export function recordEndless(id: number, wave: number, score: number) {
+  const best = endlessBest(id);
+  if (best && best.score >= score) return false;
+  save = { ...save, endless: { ...save.endless, [id]: { wave, score } } };
+  persist();
+  return true;
+}
+
+export function tutorialDone() {
+  return save.tutorial;
+}
+
+export function finishTutorial() {
+  save = { ...save, tutorial: true };
   persist();
 }

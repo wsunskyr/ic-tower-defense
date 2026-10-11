@@ -1,4 +1,4 @@
-import type { TowerKind } from './towers';
+import { TOWERS, type TowerKind } from './towers';
 import type { Waypoints } from './map';
 import { g, type WaveDef } from './waves';
 
@@ -10,6 +10,26 @@ export interface Theme {
   path: number;
   pathEdge: number;
   dash: number;
+}
+
+/** 可选的关卡挑战：通关的同时满足条件即可获得徽章 */
+export type Challenge =
+  | { kind: 'maxTowers'; n: number }
+  | { kind: 'noTower'; tower: TowerKind }
+  | { kind: 'noUpgrade' }
+  | { kind: 'earlyCalls'; n: number };
+
+export function challengeText(c: Challenge) {
+  switch (c.kind) {
+    case 'maxTowers':
+      return `场上最多 ${c.n} 座塔`;
+    case 'noTower':
+      return `不建造${TOWERS[c.tower].name}`;
+    case 'noUpgrade':
+      return '不升级任何塔';
+    case 'earlyCalls':
+      return `至少提前开波 ${c.n} 次`;
+  }
 }
 
 export interface LevelDef {
@@ -25,6 +45,9 @@ export interface LevelDef {
   towers: TowerKind[];
   /** 本关新解锁的塔，开局时提示 */
   unlock?: TowerKind;
+  challenge?: Challenge;
+  /** 无尽模式：waves 为空，波次由 endless.ts 实时生成 */
+  endless?: boolean;
   startEnergy: number;
   lives: number;
   /** 每过一波，怪物血量增加的比例 */
@@ -57,6 +80,7 @@ export const LEVELS: LevelDef[] = [
     paths: [[[-1, 4], [4, 4], [4, 1], [11, 1], [11, 6], [14, 6]]],
     props: [{ kind: 'cap', c: 1, r: 7 }, { kind: 'res', c: 8, r: 4 }, { kind: 'ind', c: 14, r: 1 }],
     towers: upTo('osc'),
+    challenge: { kind: 'maxTowers', n: 4 },
     startEnergy: 260,
     lives: 10,
     hpGrowth: 0.1,
@@ -77,6 +101,7 @@ export const LEVELS: LevelDef[] = [
     props: [{ kind: 'cap', c: 0, r: 7 }, { kind: 'res', c: 7, r: 0 }, { kind: 'ind', c: 15, r: 8 }],
     towers: upTo('filter'),
     unlock: 'filter',
+    challenge: { kind: 'noUpgrade' },
     startEnergy: 300,
     lives: 10,
     hpGrowth: 0.1,
@@ -98,6 +123,7 @@ export const LEVELS: LevelDef[] = [
     props: [{ kind: 'ram', c: 4, r: 4 }, { kind: 'cap', c: 11, r: 6 }, { kind: 'res', c: 15, r: 3 }],
     towers: upTo('adc'),
     unlock: 'adc',
+    challenge: { kind: 'earlyCalls', n: 3 },
     startEnergy: 320,
     lives: 10,
     hpGrowth: 0.12,
@@ -124,6 +150,7 @@ export const LEVELS: LevelDef[] = [
     props: [{ kind: 'ind', c: 2, r: 4 }, { kind: 'cap', c: 10, r: 3 }, { kind: 'ram', c: 14, r: 2 }],
     towers: upTo('radar'),
     unlock: 'radar',
+    challenge: { kind: 'maxTowers', n: 8 },
     startEnergy: 380,
     lives: 10,
     hpGrowth: 0.12,
@@ -147,6 +174,7 @@ export const LEVELS: LevelDef[] = [
     props: [{ kind: 'res', c: 15, r: 4 }, { kind: 'cap', c: 0, r: 5 }, { kind: 'ram', c: 7, r: 4 }],
     towers: upTo('mixer'),
     unlock: 'mixer',
+    challenge: { kind: 'noTower', tower: 'amp' },
     startEnergy: 360,
     lives: 10,
     hpGrowth: 0.22,
@@ -170,6 +198,7 @@ export const LEVELS: LevelDef[] = [
     props: [{ kind: 'res', c: 7, r: 0 }, { kind: 'cap', c: 0, r: 7 }, { kind: 'ram', c: 5, r: 7 }, { kind: 'ind', c: 15, r: 4 }],
     towers: upTo('pll'),
     unlock: 'pll',
+    challenge: { kind: 'noTower', tower: 'osc' },
     startEnergy: 340,
     lives: 10,
     hpGrowth: 0.43,
@@ -197,6 +226,7 @@ export const LEVELS: LevelDef[] = [
     props: [{ kind: 'cap', c: 1, r: 1 }, { kind: 'ind', c: 10, r: 1 }, { kind: 'ram', c: 7, r: 5 }, { kind: 'res', c: 14, r: 7 }],
     towers: upTo('comparator'),
     unlock: 'comparator',
+    challenge: { kind: 'earlyCalls', n: 4 },
     startEnergy: 440,
     lives: 10,
     hpGrowth: 0.15,
@@ -222,6 +252,7 @@ export const LEVELS: LevelDef[] = [
     props: [{ kind: 'cap', c: 5, r: 3 }, { kind: 'ind', c: 9, r: 5 }, { kind: 'ram', c: 13, r: 0 }],
     towers: upTo('ldo'),
     unlock: 'ldo',
+    challenge: { kind: 'maxTowers', n: 10 },
     startEnergy: 440,
     lives: 10,
     hpGrowth: 0.12,
@@ -249,6 +280,7 @@ export const LEVELS: LevelDef[] = [
     ],
     props: [{ kind: 'ram', c: 8, r: 4 }, { kind: 'cap', c: 13, r: 1 }, { kind: 'cap', c: 13, r: 7 }, { kind: 'res', c: 0, r: 4 }],
     towers: UNLOCK,
+    challenge: { kind: 'noTower', tower: 'pll' },
     startEnergy: 520,
     lives: 10,
     hpGrowth: 0.12,
@@ -270,3 +302,5 @@ export const LEVELS: LevelDef[] = [
 ];
 
 export const getLevel = (id: number) => LEVELS.find((l) => l.id === id) ?? LEVELS[0];
+
+export const ALL_TOWERS = UNLOCK;

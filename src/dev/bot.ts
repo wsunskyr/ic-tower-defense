@@ -7,7 +7,7 @@
 import type Phaser from 'phaser';
 import { pathCells, cellKey, COLS, ROWS } from '../config/map';
 import { blockedCells } from '../mapRender';
-import { getLevel } from '../config/levels';
+import { findLevel } from '../config/endless';
 import { TOWERS, type TowerKind } from '../config/towers';
 import { PROGRESS_KEY } from '../progress';
 
@@ -27,8 +27,10 @@ export function installBot(game: Phaser.Game) {
     game.step(t, 50);
   };
 
-  const run = async (id: number, cap = 16) => {
-    const L = getLevel(id);
+  const run = async (id: number, capArg?: number) => {
+    const L = findLevel(id);
+    // 无尽模式里玩家会把地图铺满，允许建更多塔
+    const cap = capArg ?? (L.endless ? 24 : 16);
     // 测试通关会写入星数存档，跑完后还原，避免污染玩家进度
     let saved: string | null = null;
     try {
@@ -84,7 +86,9 @@ export function installBot(game: Phaser.Game) {
     };
 
     const lives: number[] = [];
-    while (s.state === 'build' && s.waveIndex < L.waves.length) {
+    // 无尽模式最多测 60 波
+    const total = L.endless ? 60 : L.waves.length;
+    while (s.state === 'build' && s.waveIndex < total) {
       spend();
       s.startWave();
       for (let i = 0; i < 20 * 240 && s.state === 'wave'; i++) {
@@ -103,6 +107,7 @@ export function installBot(game: Phaser.Game) {
     } catch {
       /* 忽略 */
     }
+    if (L.endless) return `E${id} ${s.state} wave=${s.waveIndex} score=${s.score} ❤${s.lives}/${L.lives} towers=${s.towers.size} lives/wave=[${lives.join(',')}]`;
     return `L${id} ${s.state} ❤${s.lives}/${L.lives} towers=${s.towers.size} lives/wave=[${lives.join(',')}]`;
   };
 

@@ -2,15 +2,27 @@
 <html lang="zh">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- 手机上禁止双指缩放和双击放大，避免误触 -->
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#2d4a22" />
   <title>芯片保卫战 · IC Tower Defense</title>
   <style>
-    html,body{margin:0;height:100%;background:#2d4a22;overflow:hidden}
-    #game{width:100%;height:100%}
+    html,body{margin:0;height:100%;background:#2d4a22;overflow:hidden;overscroll-behavior:none}
+    #game{width:100%;height:100%;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+    /* 触屏竖着拿时提示横屏 */
+    #rotate{display:none;position:fixed;inset:0;z-index:10;background:#2d4a22;color:#fff;
+      font:600 18px/1.6 "PingFang SC","Microsoft YaHei",sans-serif;text-align:center;
+      flex-direction:column;align-items:center;justify-content:center;gap:12px}
+    #rotate .icon{font-size:56px;animation:turn 1.6s ease-in-out infinite}
+    @keyframes turn{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(90deg)}}
+    @media (orientation: portrait) and (pointer: coarse){#rotate{display:flex}}
   </style>
 </head>
 <body>
   <div id="game"></div>
+  <div id="rotate"><div class="icon">📱</div><div>请把手机横过来玩</div></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
