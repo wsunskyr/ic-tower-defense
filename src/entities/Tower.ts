@@ -37,6 +37,8 @@ export class Tower {
   private readonly stars: Phaser.GameObjects.Text;
   private readonly fx: Phaser.GameObjects.Graphics;
   private readonly stunIcon: Phaser.GameObjects.Text;
+  /** 受 LDO 供电时显示的攻速加成 */
+  private readonly buffIcon: Phaser.GameObjects.Text;
   /** 底座：1 级只有阴影，2 级银色，3 级发光金色 */
   private readonly base: Phaser.GameObjects.Graphics;
   private readonly glow: Phaser.GameObjects.Graphics;
@@ -75,6 +77,11 @@ export class Tower {
       .setDepth(y + 1);
     this.stunIcon = scene.add
       .text(x + 20, y - 34, '⚡', { fontSize: '18px' })
+      .setOrigin(0.5)
+      .setDepth(y + 2)
+      .setVisible(false);
+    this.buffIcon = scene.add
+      .text(x - 22, y - 32, '', { fontFamily: 'Arial', fontSize: '11px', fontStyle: 'bold', color: '#1f5a26', backgroundColor: '#c8f5a0', padding: { x: 2, y: 1 } })
       .setOrigin(0.5)
       .setDepth(y + 2)
       .setVisible(false);
@@ -241,6 +248,9 @@ export class Tower {
   update(dt: number) {
     this.fx.clear();
     this.stunIcon.setVisible(this.stun > 0);
+    const buffed = this.boost > 0 && this.stun <= 0;
+    this.buffIcon.setVisible(buffed);
+    if (buffed) this.buffIcon.setText(`⚡+${Math.round(this.boost * 100)}%`);
     if (this.stun > 0) {
       this.stun -= dt;
       this.sprite.setTint(0x888888);
@@ -409,6 +419,7 @@ export class Tower {
     this.stars.destroy();
     this.fx.destroy();
     this.stunIcon.destroy();
+    this.buffIcon.destroy();
     this.battle.stage.tweens.killTweensOf(this.glow);
     this.base.destroy();
     this.glow.destroy();

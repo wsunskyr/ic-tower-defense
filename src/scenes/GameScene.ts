@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { CELL, MAP_Y, WIDTH, HEIGHT, PathTrack, cellAt, cellCenter, cellKey } from '../config/map';
-import { TOWERS, TOWER_ORDER, type TowerKind } from '../config/towers';
+import { TOWERS, TOWER_ORDER, statText, type TowerKind } from '../config/towers';
 import { LEVELS, getLevel, type LevelDef } from '../config/levels';
 import { blockedCells, drawLevelMap, placeProps } from '../mapRender';
 import { recordWin } from '../progress';
@@ -56,6 +56,8 @@ export class GameScene extends Phaser.Scene implements Battle {
   private linkG!: Phaser.GameObjects.Graphics;
   private menu: Phaser.GameObjects.Container | null = null;
   private menuCell: string | null = null;
+  /** 当前菜单的快捷键动作 */
+  private menuKeys: { build?: (i: number) => void; upgrade?: () => void; sell?: () => void } = {};
   private energyText!: Phaser.GameObjects.Text;
   private livesText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
@@ -96,6 +98,7 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.damageTexts = 0;
     this.menu = null;
     this.menuCell = null;
+    this.menuKeys = {};
     this.tweens.timeScale = 1;
     this.time.timeScale = 1;
 
@@ -173,7 +176,7 @@ export class GameScene extends Phaser.Scene implements Battle {
   }
 
   private toggleSpeed() {
-    this.speed = this.speed === 1 ? 2 : 1;
+    this.speed = this.speed >= 3 ? 1 : this.speed + 1;
     this.tweens.timeScale = this.speed;
     this.time.timeScale = this.speed;
     this.speedBtn.setLabel(`${this.speed}x`);
@@ -197,6 +200,7 @@ export class GameScene extends Phaser.Scene implements Battle {
 
   private bindInput() {
     this.input.on('pointerdown', () => sfx.unlock());
+    this.input.keyboard?.on('keydown', (ev: KeyboardEvent) => this.onKey(ev));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.hoverG.clear();
       if (this.isOver()) return;
@@ -221,6 +225,27 @@ export class GameScene extends Phaser.Scene implements Battle {
     });
   }
 
+  /**
+   * 快捷键：空格 开波/暂停，F 倍速，P 暂停，Esc 关菜单，
+   * 建造菜单里 1~9 建塔，塔菜单里 U 升级、S 出售
+   */
+  private onKey(ev: KeyboardEvent) {
+    if (this.isOver()) return;
+    sfx.unlock();
+    const k = ev.key.toLowerCase();
+    if (k === ' ') {
+      ev.preventDefault();
+      if (this.state === 'build' && !this.paused) this.startWave();
+      else this.togglePause();
+    } else if (k === 'p') this.togglePause();
+    else if (this.paused) return;
+    else if (k === 'f') this.toggleSpeed();
+    else if (k === 'escape') this.closeMenu();
+    else if (k >= '1' && k <= '9') this.menuKeys.build?.(Number(k) - 1);
+    else if (k === 'u') this.menuKeys.upgrade?.();
+    else if (k === 's') this.menuKeys.sell?.();
+  }
+
   private isOver() {
     return this.state === 'won' || this.state === 'lost';
   }
@@ -229,6 +254,7 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.menu?.destroy();
     this.menu = null;
     this.menuCell = null;
+    this.menuKeys = {};
   }
 
   private openBuildMenu(c: number, r: number) {
@@ -237,7 +263,7 @@ export class GameScene extends Phaser.Scene implements Battle {
     const n = kinds.length;
     const gap = 70;
     const panelW = n * gap + 20;
-    const panelH = 128;
+    const panelH = 148;
     const px = Phaser.Math.Clamp(center.x, panelW / 2 + 6, WIDTH - panelW / 2 - 6);
     const above = center.y - CELL / 2 - panelH - 8 > MAP_Y;
     const py = above ? center.y - CELL / 2 - panelH / 2 - 8 : center.y + CELL / 2 + panelH / 2 + 8;
@@ -252,16 +278,28 @@ export class GameScene extends Phaser.Scene implements Battle {
     container.add(g);
 
     const info = this.add
-      .text(px, py + panelH / 2 - 20, '选择一座防御塔', { fontFamily: FONT, fontSize: '14px', color: '#6b5a3a' })
+      .text(px, py + panelH / 2 - 38, '选择一座防御塔（数字键快速建造）', { fontFamily: FONT, fontSize: '14px', color: '#6b5a3a' })
       .setOrigin(0.5);
-    container.add(info);
+    const stat = this.add
+      .text(px, py + panelH / 2 - 17, '', { fontFamily: FONT, fontSize: '12px', fontStyle: 'bold', color: '#2a6fb8' })
+      .setOrigin(0.5);
+    container.add([info, stat]);
+    const tryBuild = (kind: TowerKind) => {
+      if (this.energy < TOWERS[kind].levels[0].cost) {
+        info.setText('能量不足！');
+        sfx.play('deny');
+        return;
+      }
+      this.build(kind, c, r);
+    };
+    this.menuKeys = { build: (i) => kinds[i] && tryBuild(kinds[i]) };
 
     kinds.forEach((kind, i) => {
       const def = TOWERS[kind];
       const cost = def.levels[0].cost;
       const afford = this.energy >= cost;
       const x = px - ((n - 1) * gap) / 2 + i * gap;
-      const y = py - 22;
+      const y = py - 32;
       const bg = this.add.circle(x, y, 28, afford ? 0xe9f6ff : 0xdddddd).setStrokeStyle(3, afford ? 0x5fb0ff : 0xaaaaaa);
       const icon = this.add.image(x, y, kind);
       icon.setScale(46 / icon.width);
@@ -274,18 +312,15 @@ export class GameScene extends Phaser.Scene implements Battle {
       bg.setInteractive({ useHandCursor: afford });
       bg.on('pointerover', () => {
         info.setText(`${def.name}：${def.desc}`);
+        stat.setText(statText(kind, 0));
         if (afford) icon.setScale(52 / icon.width);
       });
       bg.on('pointerout', () => icon.setScale(46 / icon.width));
-      bg.on('pointerdown', () => {
-        if (!afford) {
-          info.setText('能量不足！');
-          sfx.play('deny');
-          return;
-        }
-        this.build(kind, c, r);
-      });
-      container.add([bg, icon, price]);
+      bg.on('pointerdown', () => tryBuild(kind));
+      const hotkey = this.add
+        .text(x - 22, y - 22, `${i + 1}`, { fontFamily: 'Arial', fontSize: '11px', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#5fb0ff', padding: { x: 3, y: 1 } })
+        .setOrigin(0.5);
+      container.add([bg, icon, price, hotkey]);
     });
 
     container.setScale(0.8).setAlpha(0);
@@ -309,10 +344,13 @@ export class GameScene extends Phaser.Scene implements Battle {
     container.add(g);
 
     const label = this.add
-      .text(tower.x, tower.y - 98, `${tower.def.name}  Lv.${tower.level + 1}`, {
-        fontFamily: FONT, fontSize: '15px', color: '#ffffff', fontStyle: 'bold', backgroundColor: '#2c3a52cc', padding: { x: 8, y: 4 },
+      .text(tower.x, tower.y - 98, `${tower.def.name}  Lv.${tower.level + 1}\n${statText(tower.kind, tower.level, true)}`, {
+        fontFamily: FONT, fontSize: '13px', color: '#ffffff', fontStyle: 'bold', backgroundColor: '#2c3a52dd', padding: { x: 8, y: 4 },
+        align: 'center', lineSpacing: 3,
       })
       .setOrigin(0.5);
+    // 靠边时整体挪回屏幕内
+    label.setX(Phaser.Math.Clamp(tower.x, label.width / 2 + 4, WIDTH - label.width / 2 - 4));
     container.add(label);
 
     const upY = Math.max(tower.y - 62, MAP_Y + 22);
@@ -323,8 +361,11 @@ export class GameScene extends Phaser.Scene implements Battle {
       container.add(b.container);
     } else {
       const cost = tower.upgradeCost;
-      const b = makeButton(this, tower.x, upY, 120, 36, `升级 ⚡${cost}`, 0x3cb35a, () => {
-        if (this.energy < cost) return;
+      const doUpgrade = () => {
+        if (this.energy < cost) {
+          sfx.play('deny');
+          return;
+        }
         this.energy -= cost;
         tower.upgrade();
         sfx.play('upgrade');
@@ -333,7 +374,9 @@ export class GameScene extends Phaser.Scene implements Battle {
         this.refreshHud();
         this.closeMenu();
         this.openTowerMenu(tower);
-      }, 15);
+      };
+      const b = makeButton(this, tower.x, upY, 120, 36, `升级 ⚡${cost} [U]`, 0x3cb35a, doUpgrade, 14);
+      this.menuKeys.upgrade = doUpgrade;
       b.setEnabled(this.energy >= cost);
       container.add(b.container);
       // 下一级造型预览
@@ -346,11 +389,12 @@ export class GameScene extends Phaser.Scene implements Battle {
       container.add([arrow, preview, icon]);
       this.tweens.add({ targets: icon, scale: icon.scale * 1.12, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
     }
-    const sell = makeButton(this, tower.x, sellY, 120, 36, `出售 +${tower.sellValue}`, 0xe0533a, () => this.sell(tower), 15);
+    const sell = makeButton(this, tower.x, sellY, 120, 36, `出售 +${tower.sellValue} [S]`, 0xe0533a, () => this.sell(tower), 14);
+    this.menuKeys.sell = () => this.sell(tower);
     container.add(sell.container);
 
-    label.setY(upY - 34);
-    if (label.y < MAP_Y + 12) label.setY(sellY + 34);
+    label.setY(upY - 42);
+    if (label.y - label.height / 2 < MAP_Y + 4) label.setY(sellY + 42);
 
     container.setAlpha(0);
     this.tweens.add({ targets: container, alpha: 1, duration: 120 });

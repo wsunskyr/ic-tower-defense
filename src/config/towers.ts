@@ -130,3 +130,38 @@ export const TOWER_ORDER: TowerKind[] = ['amp', 'osc', 'filter', 'adc', 'radar',
 
 /** 出售返还比例 */
 export const SELL_RATE = 0.7;
+
+const pct = (v: number) => `${Math.round(v * 100)}%`;
+const num = (v: number) => `${Math.round(v * 10) / 10}`;
+
+/** 菜单里展示的数值：[名称, 当前值]，next 给出时附上升级后的值 */
+export function towerStats(kind: TowerKind, level: number): [string, string][] {
+  const s = TOWERS[kind].levels[level];
+  const rate = s.interval > 0 ? `${num(1 / s.interval)}/秒` : '';
+  switch (kind) {
+    case 'amp':
+    case 'osc':
+      return [['伤害', `${s.damage}`], ['攻速', rate], ['射程', `${s.range}`]];
+    case 'adc':
+      return [['伤害', `${s.damage}`], ['斩杀线', pct(s.extra)], ['射程', `${s.range}`]];
+    case 'filter':
+      return [['减速', pct(s.extra)], ['伤害', `${s.damage}/秒`], ['射程', `${s.range}`]];
+    case 'radar':
+      return [['增伤', `+${pct(s.extra)}`], ['射程', `${s.range}`]];
+    case 'pll':
+      return [['伤害', `${s.damage}/秒`], ['满蓄力', `×${s.extra}`], ['射程', `${s.range}`]];
+    case 'mixer':
+      return [['伤害', `${s.damage}`], ['边带', pct(s.extra)], ['攻速', rate]];
+    case 'comparator':
+      return [['伤害', `${s.damage}`], ['暴击', `×${s.extra}`], ['攻速', rate]];
+    case 'ldo':
+      return [['攻速', `+${pct(s.extra)}`], ['抗瘫痪', pct(LDO_PROTECT[level])], ['射程', `${s.range}`]];
+  }
+}
+
+/** 一行文字；有下一级时显示“当前→下一级” */
+export function statText(kind: TowerKind, level: number, compare = false) {
+  const cur = towerStats(kind, level);
+  const nxt = compare && level + 1 < TOWERS[kind].levels.length ? towerStats(kind, level + 1) : null;
+  return cur.map(([k, v], i) => (nxt && nxt[i][1] !== v ? `${k} ${v}→${nxt[i][1]}` : `${k} ${v}`)).join('   ');
+}
