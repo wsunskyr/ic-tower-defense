@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>角色设定稿</title>
+<style>
+  body{margin:0;background:#f4f9ee;color:#333;font-family:-apple-system,"PingFang SC",sans-serif}
+  h1{font-size:20px;margin:20px 16px 4px}
+  h2{font-size:16px;margin:20px 16px 8px;color:#2a6fb8}
+  p.sub{margin:0 16px 8px;color:#777;font-size:13px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:0 16px}
+  .c{background:#fff;border-radius:14px;padding:8px 8px 12px;box-shadow:0 2px 6px #0001;text-align:center}
+  .c.m{background:#fff6f6}
+  .c.boss{grid-column:span 2;background:#fff0e8}
+  .c svg{width:100%;height:auto;display:block}
+  .n{font-weight:bold;font-size:14px;margin-top:2px}
+  .t{font-size:12px;color:#777;margin-top:4px;line-height:1.5}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  @keyframes shake{0%,100%{transform:translate(0,0)}25%{transform:translate(-3px,1px)}50%{transform:translate(2px,-2px)}75%{transform:translate(3px,2px)}}
+  @keyframes ring{from{r:30;opacity:.8}to{r:70;opacity:0}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes flick{0%,100%{opacity:.85}50%{opacity:.35}}
+  .bob{animation:bob 1.4s ease-in-out infinite}
+  .shake{animation:shake .25s linear infinite}
+  .ring{animation:ring 1.5s linear infinite}
+  .spin{animation:spin 3s linear infinite;transform-origin:80px 80px}
+  .flick{animation:flick 1.2s ease-in-out infinite}
+</style>
+</head>
+<body>
+<h1>IC 塔防 · Q 版角色设定稿 v0.1</h1>
+<p class="sub">设计原则：外形直接取自元件符号或物理现象，一眼能认出“是什么”；塔用暖亮色、圆润造型，怪物用冷色或刺状造型，敌我一眼可分。</p>
+
+<h2>防御塔</h2>
+<div class="grid">
+
+<div class="c"><svg viewBox="0 0 160 160"><g class="bob">
+  <ellipse cx="80" cy="140" rx="40" ry="7" fill="#0001"/>
+  <path d="M38 40 L38 128 L128 84 Z" fill="#5fb0ff" stroke="#2a6fb8" stroke-width="5" stroke-linejoin="round"/>
+  <text x="44" y="64" font-size="20" font-weight="900" fill="#fff">+</text><text x="46" y="118" font-size="24" font-weight="900" fill="#fff">−</text>
+  <circle cx="68" cy="76" r="6" fill="#123"/><circle cx="86" cy="80" r="6" fill="#123"/><circle cx="70" cy="74" r="2" fill="#fff"/><circle cx="88" cy="78" r="2" fill="#fff"/>
+  <path d="M66 96q12 10 22-2" fill="none" stroke="#123" stroke-width="4" stroke-linecap="round"/>
+  <path d="M128 84h18" stroke="#2a6fb8" stroke-width="5" stroke-linecap="round"/><circle cx="150" cy="84" r="6" fill="#ffe14d" stroke="#e0a800" stroke-width="2"/>
+</g></svg><div class="n">放大器 Amp</div><div class="t">运放三角小人，±是眼眉<br>单体直射，基础塔</div></div>
+
+<div class="c"><svg viewBox="0 0 160 160">
+  <circle class="ring" cx="80" cy="82" fill="none" stroke="#ff8fc8" stroke-width="4"/>
+  <g class="bob"><ellipse cx="80" cy="140" rx="36" ry="7" fill="#0001"/>
+  <circle cx="80" cy="82" r="38" fill="#ff8fc8" stroke="#c94f8d" stroke-width="5"/>
+  <path d="M80 44v-14" stroke="#c94f8d" stroke-width="4"/><circle cx="80" cy="27" r="6" fill="#fff36b" stroke="#c9a200" stroke-width="2"/>
+  <path d="M62 72q4-6 8 0M90 72q4-6 8 0" fill="none" stroke="#123" stroke-width="4" stroke-linecap="round"/>
+  <path d="M56 98q6-12 12 0t12 0 12 0 12 0" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <text x="114" y="52" font-size="22" fill="#c94f8d">♪</text></g>
+</svg><div class="n">振荡器 OSC</div><div class="t">肚子上是正弦波，头顶天线<br>周期性环形冲击波</div></div>
+
+<div class="c"><svg viewBox="0 0 160 160"><g class="bob">
+  <ellipse cx="80" cy="140" rx="40" ry="7" fill="#0001"/>
+  <rect x="34" y="40" width="92" height="84" rx="16" fill="#ffd34d" stroke="#c99a00" stroke-width="5"/>
+  <rect x="46" y="52" width="68" height="40" rx="6" fill="#2c3340"/>
+  <path d="M54 84h10v-8h10v-8h10v-8h10v-8h10" fill="none" stroke="#5f5" stroke-width="3"/>
+  <circle cx="62" cy="106" r="5" fill="#123"/><circle cx="98" cy="106" r="5" fill="#123"/><path d="M74 112h12" stroke="#123" stroke-width="4" stroke-linecap="round"/>
+  <path d="M34 82h-12M126 82h12" stroke="#c99a00" stroke-width="5" stroke-linecap="round"/>
+  <text x="26" y="36" font-size="13" font-family="monospace" fill="#2a6fb8" font-weight="bold">0101</text>
+</g></svg><div class="n">ADC</div><div class="t">屏幕脸显示量化阶梯<br>低血量怪直接“量化”清除</div></div>
+
+<div class="c"><svg viewBox="0 0 160 160"><g class="bob">
+  <ellipse cx="80" cy="140" rx="34" ry="7" fill="#0001"/>
+  <path d="M30 40h100l-34 52v34l-32 10v-44z" fill="#7ad6a0" stroke="#2f8f5a" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M40 50h80" stroke="#2f8f5a" stroke-width="3" stroke-dasharray="6 5"/>
+  <circle cx="64" cy="64" r="5" fill="#123"/><circle cx="94" cy="64" r="5" fill="#123"/><path d="M70 78q10 6 20 0" fill="none" stroke="#123" stroke-width="4" stroke-linecap="round"/>
+  <g fill="#ff6b6b"><circle cx="50" cy="28" r="5"/><circle cx="66" cy="22" r="4"/></g><circle cx="80" cy="132" r="4" fill="#5fb0ff"/>
+</g></svg><div class="n">滤波器 Filter</div><div class="t">漏斗造型：大颗留住，小颗漏下<br>减速区，克制快怪</div></div>
+
+<div class="c"><svg viewBox="0 0 160 160"><g class="bob">
+  <ellipse cx="80" cy="140" rx="34" ry="7" fill="#0001"/>
+  <rect x="62" y="96" width="36" height="36" rx="8" fill="#9aa7ff" stroke="#4f5bc4" stroke-width="5"/>
+  <path d="M80 96V84" stroke="#4f5bc4" stroke-width="6"/>
+  <path d="M34 60a50 34 -30 0 0 92-10z" fill="#d6dcff" stroke="#4f5bc4" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="68" cy="58" r="5" fill="#123"/><circle cx="92" cy="54" r="5" fill="#123"/><path d="M72 70q8 4 16-2" fill="none" stroke="#123" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M112 22q12 10 4 24M124 14q18 16 6 38" fill="none" stroke="#4f5bc4" stroke-width="4" stroke-linecap="round" class="flick"/>
+</g></svg><div class="n">雷达 Radar</div><div class="t">锅形天线脸，往外发电波<br>揭示隐身怪并标记</div></div>
+
+<div class="c"><svg viewBox="0 0 160 160"><g class="bob">
+  <ellipse cx="80" cy="140" rx="36" ry="7" fill="#0001"/>
+  <path d="M60 50v-12a20 20 0 0 1 40 0v12" fill="none" stroke="#8a8f99" stroke-width="9"/>
+  <circle cx="80" cy="88" r="42" fill="#ffb35c" stroke="#c6741a" stroke-width="5"/>
+  <circle cx="80" cy="88" r="30" fill="#fff4e0"/>
+  <g class="spin"><path d="M80 88V64" stroke="#c6741a" stroke-width="4" stroke-linecap="round" style="transform-origin:80px 88px"/></g>
+  <circle cx="68" cy="88" r="4" fill="#123"/><circle cx="92" cy="88" r="4" fill="#123"/><path d="M72 102q8 6 16 0" fill="none" stroke="#123" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="80" cy="88" r="3" fill="#c6741a"/>
+</g></svg><div class="n">锁相环 PLL</div><div class="t">时钟脸 + 头顶挂锁 = “锁相”<br>锁定目标，伤害逐渐升高</div></div>
+
+</div>
+
+<h2>干扰怪物</h2>
+<div class="grid">
+
+<div class="c m"><svg viewBox="0 0 160 160"><g class="shake">
+  <ellipse cx="80" cy="140" rx="30" ry="6" fill="#0001"/>
+  <path d="M80 40l8 12 14-6 0 15 15 3-9 12 10 11-14 5 3 15-15-4-7 13-8-13-15 4 3-15-14-5 10-11-9-12 15-3 0-15 14 6z" fill="#8a7bd9" stroke="#4d3f9c" stroke-width="4" stroke-linejoin="round"/>
+  <g fill="#fff" opacity=".7"><rect x="60" y="64" width="4" height="4"/><rect x="96" y="70" width="4" height="4"/><rect x="74" y="104" width="4" height="4"/><rect x="88" y="98" width="3" height="3"/></g>
+  <circle cx="70" cy="82" r="7" fill="#fff"/><circle cx="92" cy="82" r="7" fill="#fff"/><circle cx="71" cy="83" r="3.5"/><circle cx="91" cy="83" r="3.5"/>
+  <path d="M70 98l5 4 5-4 5 4 5-4" fill="none" stroke="#2a2050" stroke-width="3"/>
+</g></svg><div class="n">热噪声 Thermal</div><div class="t">毛刺刺的电视雪花团<br>成群出现，血少</div></div>
+
+<div class="c m"><svg viewBox="0 0 160 160"><g class="bob" style="animation-duration:.5s">
+  <ellipse cx="80" cy="140" rx="24" ry="5" fill="#0001"/>
+  <path d="M74 24h34l-20 40h22l-46 64 12-48h-20z" fill="#ff7a3d" stroke="#b84a14" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M78 58l10 4M96 58l-8 4" stroke="#123" stroke-width="4" stroke-linecap="round"/><circle cx="83" cy="68" r="3"/><circle cx="92" cy="68" r="3"/>
+  <path d="M30 70h22M24 86h22M32 102h18" stroke="#ffb08a" stroke-width="4" stroke-linecap="round"/>
+</g></svg><div class="n">毛刺 Glitch</div><div class="t">一道带怒眉的闪电<br>速度极快，血极少</div></div>
+
+<div class="c m"><svg viewBox="0 0 160 160"><g class="bob">
+  <ellipse cx="80" cy="140" rx="46" ry="6" fill="#0001"/>
+  <path d="M56 80q24-30 48 0M56 80q24 30 48 0" fill="none" stroke="#2a8072" stroke-width="3" stroke-dasharray="5 4"/>
+  <circle cx="48" cy="84" r="26" fill="#55c4b0" stroke="#2a8072" stroke-width="5"/><circle cx="112" cy="84" r="26" fill="#55c4b0" stroke="#2a8072" stroke-width="5"/>
+  <path d="M38 78h8M52 78h8M102 78h8M116 78h8" stroke="#123" stroke-width="4" stroke-linecap="round"/>
+  <path d="M42 96q6-5 12 0M106 96q6-5 12 0" fill="none" stroke="#123" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M68 60l6-10 6 8 6-10 6 12" fill="none" stroke="#ffd166" stroke-width="3.5" stroke-linejoin="round"/>
+</g></svg><div class="n">串扰 Crosstalk</div><div class="t">连体双胞胎，中间有耦合电弧<br>打一只，另一只分摊伤害</div></div>
+
+<div class="c m"><svg viewBox="0 0 160 160">
+  <ellipse cx="80" cy="140" rx="50" ry="6" fill="#0001"/>
+  <path d="M24 130q0-14 20-14h80q14 0 14 14z" fill="#c9b7ff" stroke="#6a55b5" stroke-width="5"/>
+  <circle cx="92" cy="84" r="36" fill="#f29ac9" stroke="#a84879" stroke-width="5"/>
+  <path d="M92 84m-8 0a8 8 0 1 1 16 0a16 16 0 1 1 -32 0a24 24 0 1 1 48 0" fill="none" stroke="#a84879" stroke-width="4"/>
+  <circle cx="38" cy="108" r="14" fill="#c9b7ff" stroke="#6a55b5" stroke-width="4"/>
+  <path d="M32 80l6 18M44 80l-4 18" stroke="#6a55b5" stroke-width="3"/><circle cx="32" cy="78" r="4" fill="#6a55b5"/><circle cx="44" cy="78" r="4" fill="#6a55b5"/>
+  <path d="M32 106h4M40 106h4" stroke="#123" stroke-width="3" stroke-linecap="round"/><text x="104" y="40" font-size="14" font-style="italic" fill="#a84879" font-weight="bold">1/f</text>
+</svg><div class="n">闪烁噪声 1/f</div><div class="t">背着螺旋壳的慢蜗牛<br>移动慢，血很厚</div></div>
+
+<div class="c m"><svg viewBox="0 0 160 160">
+  <ellipse cx="80" cy="140" rx="30" ry="6" fill="#0001"/>
+  <g opacity=".25"><path d="M50 128V76a30 30 0 0 1 60 0v52l-10-8-10 8-10-8-10 8-10-8z" fill="#9fd4ff" transform="translate(-14 0)"/></g>
+  <g opacity=".45"><path d="M50 128V76a30 30 0 0 1 60 0v52l-10-8-10 8-10-8-10 8-10-8z" fill="#9fd4ff" transform="translate(12 0)"/></g>
+  <g class="shake"><path d="M50 128V76a30 30 0 0 1 60 0v52l-10-8-10 8-10-8-10 8-10-8z" fill="#9fd4ff" stroke="#3b7fb8" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="70" cy="80" r="6" fill="#123"/><circle cx="92" cy="80" r="6" fill="#123"/><ellipse cx="81" cy="100" rx="6" ry="8" fill="#123"/></g>
+</g></svg><div class="n">抖动 Jitter</div><div class="t">带残影的哆嗦小幽灵<br>位置抖动，容易被打空</div></div>
+
+<div class="c m"><svg viewBox="0 0 160 160">
+  <ellipse cx="80" cy="140" rx="30" ry="6" fill="#0001"/>
+  <g class="flick"><rect x="46" y="56" width="68" height="64" rx="14" fill="#b8b8c8" stroke="#5c5c78" stroke-width="5"/>
+  <path d="M66 56l-14-26M94 56l14-26" stroke="#5c5c78" stroke-width="4"/><circle cx="52" cy="28" r="5" fill="#ff6b6b"/><circle cx="108" cy="28" r="5" fill="#ff6b6b"/>
+  <rect x="56" y="68" width="48" height="28" rx="5" fill="#2c3340"/><path d="M62 82q5-8 10 0t10 0 10 0 10 0" fill="none" stroke="#ff6b6b" stroke-width="3"/>
+  <path d="M64 108h32" stroke="#123" stroke-width="4" stroke-linecap="round" stroke-dasharray="4 4"/></g>
+  <path d="M22 70q-8 14 0 28M128 70q8 14 0 28" fill="none" stroke="#5c5c78" stroke-width="3" stroke-linecap="round"/>
+</svg><div class="n">电磁干扰 EMI</div><div class="t">半透明的老式收音机怪<br>隐身，需要雷达才能看见</div></div>
+
+<div class="c m boss"><svg viewBox="0 0 320 160"><g class="bob">
+  <ellipse cx="160" cy="146" rx="80" ry="8" fill="#0001"/>
+  <path d="M90 100a32 32 0 0 1 14-60a44 44 0 0 1 80-6a36 36 0 0 1 50 34a26 26 0 0 1-8 52h-126a26 26 0 0 1-10-20z" fill="#5a5f7a" stroke="#2e3148" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M128 66l22 10M196 66l-22 10" stroke="#ffd166" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="140" cy="84" r="8" fill="#ffd166"/><circle cx="182" cy="84" r="8" fill="#ffd166"/>
+  <path d="M136 108l12-8 12 8 12-8 12 8" fill="none" stroke="#ffd166" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M120 120l-12 22h12l-8 16M204 120l10 18h-12l10 18" fill="none" stroke="#ffd166" stroke-width="6" stroke-linejoin="round" stroke-linecap="round" class="flick"/>
+  <text x="228" y="40" font-size="18" font-weight="900" fill="#c62">kV!</text>
+</g></svg><div class="n">Boss · 静电放电 ESD</div><div class="t">怒气冲冲的雷雨云，带着 kV 级的闪电<br>高血量冲锋；ESD 二极管陷阱专门克制它</div></div>
+
+</div>
+<p class="sub" style="margin-top:16px">注：这是方向稿，用来确认识别度和气质，不是最终美术。</p>
+</body>
+</html>
