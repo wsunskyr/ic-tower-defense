@@ -20,6 +20,9 @@ class Sfx {
   private noiseBuf: AudioBuffer | null = null;
   private last = new Map<SfxName, number>();
   muted = false;
+  /** 音频上下文创建后通知背景音乐 */
+  onMute?: () => void;
+  onReady?: (ctx: AudioContext, out: AudioNode, noise: AudioBuffer) => void;
 
   constructor() {
     try {
@@ -48,6 +51,7 @@ class Sfx {
       this.ctx = ctx;
       this.master = master;
       this.noiseBuf = buf;
+      this.onReady?.(ctx, comp, buf);
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
   }
@@ -55,6 +59,7 @@ class Sfx {
   toggleMute() {
     this.muted = !this.muted;
     if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : 0.5, this.ctx.currentTime, 0.02);
+    this.onMute?.();
     try {
       localStorage.setItem(STORAGE_KEY, this.muted ? '1' : '0');
     } catch {
@@ -200,3 +205,212 @@ class Sfx {
 }
 
 export const sfx = new Sfx();
+
+// ───────────────────────── 背景音乐 ─────────────────────────
+
+export type TrackName = 'menu' | 'battle' | 'boss';
+
+/** 一首循环曲：每小节 16 个十六分音符，和弦按小节轮换 */
+interface Track {
+  bpm: number;
+  /** 每小节的根音（MIDI） */
+  roots: number[];
+  /** 旋律：每小节 16 格，null 为休止，数字是相对根音的半音 */
+  melody: (number | null)[][];
+  bass: (number | null)[];
+  hat: boolean[];
+  kick: boolean[];
+  lead: OscillatorType;
+}
+
+const _ = null;
+const TRACKS: Record<TrackName, Track> = {
+  // 选关：轻快、放松
+  menu: {
+    bpm: 96,
+    roots: [60, 57, 53, 55],
+    melody: [
+      [12, _, 16, _, 19, _, 16, _, 14, _, 12, _, 7, _, _, _],
+      [12, _, 15, _, 19, _, 15, _, 14, _, 12, _, 10, _, _, _],
+      [12, _, 16, _, 19, _, 21, _, 19, _, 16, _, 12, _, _, _],
+      [14, _, 17, _, 19, _, 17, _, 14, _, 11, _, 7, _, _, _],
+    ],
+    bass: [0, _, _, _, 7, _, _, _, 12, _, _, _, 7, _, _, _],
+    hat: [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false],
+    kick: [true, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false],
+    lead: 'triangle',
+  },
+  // 战斗：更快，带底鼓
+  battle: {
+    bpm: 132,
+    roots: [57, 53, 48, 55],
+    melody: [
+      [12, _, 12, 15, _, 12, 19, _, 17, _, 15, _, 12, _, 10, _],
+      [12, _, 12, 16, _, 12, 19, _, 21, _, 19, _, 16, _, 14, _],
+      [12, _, 12, 16, _, 19, 24, _, 23, _, 19, _, 16, _, 19, _],
+      [14, _, 14, 17, _, 14, 19, _, 17, _, 14, _, 11, _, 7, _],
+    ],
+    bass: [0, _, 12, _, 0, _, 12, _, 0, _, 12, _, 0, _, 12, 10],
+    hat: [true, false, true, true, true, false, true, true, true, false, true, true, true, false, true, true],
+    kick: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, true],
+    lead: 'square',
+  },
+  // Boss 在场：小调、低沉
+  boss: {
+    bpm: 120,
+    roots: [45, 45, 41, 44],
+    melody: [
+      [12, _, _, 13, 12, _, 7, _, 12, _, _, 13, 15, _, 13, _],
+      [12, _, _, 13, 12, _, 7, _, 6, _, 7, _, _, _, _, _],
+      [12, _, _, 15, 12, _, 8, _, 12, _, _, 15, 17, _, 15, _],
+      [11, _, _, 12, 11, _, 8, _, 7, _, 8, _, 11, _, _, _],
+    ],
+    bass: [0, 0, _, 0, 0, _, 0, _, 0, 0, _, 0, 1, _, 0, _],
+    hat: [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
+    kick: [true, false, false, true, false, false, true, false, true, false, false, true, false, false, true, false],
+    lead: 'sawtooth',
+  },
+};
+
+const MUSIC_KEY = 'ic-td-music-off';
+const MUSIC_VOL = 0.22;
+const midi = (n: number) => 440 * 2 ** ((n - 69) / 12);
+
+/** 用 Web Audio 实时合成的循环背景音乐，提前约 0.25 秒排程音符 */
+class Music {
+  enabled = true;
+  private ctx: AudioContext | null = null;
+  private out: GainNode | null = null;
+  private noise: AudioBuffer | null = null;
+  private track: TrackName | null = null;
+  private wanted: TrackName | null = null;
+  private step = 0;
+  private nextTime = 0;
+  private timer: number | undefined;
+  private duck = 1;
+
+  constructor() {
+    try {
+      this.enabled = localStorage.getItem(MUSIC_KEY) !== '1';
+    } catch {
+      /* 忽略 */
+    }
+    sfx.onMute = () => this.refresh();
+    sfx.onReady = (ctx, dest, noise) => {
+      this.ctx = ctx;
+      this.noise = noise;
+      this.out = ctx.createGain();
+      this.out.gain.value = this.level;
+      this.out.connect(dest);
+      if (this.wanted) this.play(this.wanted);
+    };
+  }
+
+  private get level() {
+    return this.enabled && !sfx.muted ? MUSIC_VOL * this.duck : 0;
+  }
+
+  /** 切换曲目；音频还没解锁时先记下，解锁后自动开始 */
+  play(name: TrackName) {
+    this.wanted = name;
+    if (!this.ctx || this.track === name) return;
+    this.track = name;
+    this.step = 0;
+    this.nextTime = this.ctx.currentTime + 0.1;
+    if (this.timer === undefined) this.timer = window.setInterval(() => this.schedule(), 60);
+  }
+
+  stop() {
+    this.wanted = null;
+    this.track = null;
+  }
+
+  /** 暂停菜单打开时压低音量 */
+  setDuck(on: boolean) {
+    this.duck = on ? 0.35 : 1;
+    this.refresh();
+  }
+
+  toggle() {
+    this.enabled = !this.enabled;
+    try {
+      localStorage.setItem(MUSIC_KEY, this.enabled ? '0' : '1');
+    } catch {
+      /* 忽略 */
+    }
+    this.refresh();
+    return this.enabled;
+  }
+
+  /** 音效静音或开关变化后同步音量 */
+  refresh() {
+    if (this.out && this.ctx) this.out.gain.setTargetAtTime(this.level, this.ctx.currentTime, 0.05);
+  }
+
+  private schedule() {
+    const ctx = this.ctx;
+    if (!ctx || !this.track) return;
+    const tr = TRACKS[this.track];
+    const sixteenth = 60 / tr.bpm / 4;
+    // 标签页切到后台再回来时不要补放一大串音符
+    if (this.nextTime < ctx.currentTime - 0.2) this.nextTime = ctx.currentTime + 0.05;
+    while (this.nextTime < ctx.currentTime + 0.25) {
+      const bar = Math.floor(this.step / 16) % tr.roots.length;
+      const i = this.step % 16;
+      const root = tr.roots[bar];
+      const t = this.nextTime;
+      const m = tr.melody[bar][i];
+      if (m !== null) this.note(tr.lead, midi(root + m), t, sixteenth * 1.8, tr.lead === 'triangle' ? 0.22 : 0.09);
+      const b = tr.bass[i];
+      if (b !== null) this.note('triangle', midi(root - 12 + b), t, sixteenth * 1.6, 0.35);
+      if (tr.hat[i]) this.hit(t, 0.03, 0.06, 8000, 'highpass');
+      if (tr.kick[i]) this.kick(t);
+      this.nextTime += sixteenth;
+      this.step++;
+    }
+  }
+
+  private note(type: OscillatorType, f: number, t: number, dur: number, vol: number) {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g).connect(this.out!);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  }
+
+  private hit(t: number, dur: number, vol: number, cutoff: number, type: BiquadFilterType) {
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = cutoff;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(this.out!);
+    src.start(t, Math.random() * 0.5);
+    src.stop(t + dur + 0.02);
+  }
+
+  private kick(t: number) {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.frequency.setValueAtTime(140, t);
+    osc.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    g.gain.setValueAtTime(0.5, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+    osc.connect(g).connect(this.out!);
+    osc.start(t);
+    osc.stop(t + 0.17);
+  }
+}
+
+export const music = new Music();

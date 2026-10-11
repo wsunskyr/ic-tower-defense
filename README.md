@@ -21,7 +21,8 @@ npm run build      # 类型检查 + 生产构建到 dist/
 | `src/config/map.ts` | 格子坐标、走线计算 |
 | `src/scenes/` | `Boot`（加载）、`Menu`（选关）、`Game`（战斗） |
 | `src/entities/` | `Tower`、`Enemy` |
-| `src/audio.ts` | Web Audio 合成音效 |
+| `src/audio.ts` | Web Audio 合成音效和背景音乐（选关 / 战斗 / Boss 三首循环曲） |
+| `src/codex.ts` | 怪物图鉴：遇到过的怪物才显示详情 |
 | `src/progress.ts` | 通关星数（浏览器 localStorage，键 `ic-td-progress-v2`） |
 | `src/display.ts` | 高分辨率渲染：画布按设备像素比 2~3 倍绘制 |
 | `src/dev/bot.ts` | 开发用的自动平衡测试，不进入生产包 |
@@ -57,6 +58,6 @@ await __bot.run(3)   // "L3 won ❤8/10 towers=10 lives/wave=[...]"
 
 解锁顺序：放大器、振荡器 → 滤波器 → ADC → 雷达 → 混频器 → 锁相环 → 比较器 → LDO。
 
-快捷键：空格 开波 / 暂停，F 切换 1x/2x/3x，P 暂停，Esc 关闭菜单；建造菜单里 1~9 建塔，选中塔时 U 升级、S 出售。
+快捷键：空格 开波 / 暂停，F 切换 1x/2x/3x，P 或 Esc 打开暂停菜单（继续、重开、图鉴、音乐音效开关、返回选关）；切到别的标签页会自动暂停；建造菜单里 1~9 建塔，选中塔时 U 升级、S 出售。
 
 开发模式下 `window.__game` 暴露游戏实例，便于在控制台调试。

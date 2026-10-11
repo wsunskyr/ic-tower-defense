@@ -88,6 +88,8 @@ export function installBot(game: Phaser.Game) {
       spend();
       s.startWave();
       for (let i = 0; i < 20 * 240 && s.state === 'wave'; i++) {
+        // 标签页隐藏时游戏会自动暂停，测试时直接恢复
+        if (s.paused) s.togglePause();
         frame();
         if (i % 20 === 0) spend();
         // 定期让出主线程；用 MessageChannel 而不是 setTimeout，后台标签页里不会被节流

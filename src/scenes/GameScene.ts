@@ -3,13 +3,14 @@ import { CELL, MAP_Y, WIDTH, HEIGHT, PathTrack, cellAt, cellCenter, cellKey } fr
 import { TOWERS, TOWER_ORDER, statText, type TowerKind } from '../config/towers';
 import { LEVELS, getLevel, type LevelDef } from '../config/levels';
 import { blockedCells, drawLevelMap, placeProps } from '../mapRender';
-import { recordWin } from '../progress';
+import { recordWin, markSeen } from '../progress';
+import { openCodex } from '../codex';
 import { ENEMIES, ESD_DISCHARGE, type EnemyKind } from '../config/enemies';
 import { waveBonus } from '../config/waves';
 import { Enemy } from '../entities/Enemy';
 import { Tower, towerTexture, type Battle } from '../entities/Tower';
 import { FONT, makeButton, type Button } from '../ui';
-import { sfx, type SfxName } from '../audio';
+import { sfx, music, type SfxName } from '../audio';
 import { setupCamera } from '../display';
 
 type State = 'build' | 'wave' | 'won' | 'lost';
@@ -64,7 +65,11 @@ export class GameScene extends Phaser.Scene implements Battle {
   private startBtn!: Button;
   private speedBtn!: Button;
   private pauseBtn!: Button;
-  private pauseLabel!: Phaser.GameObjects.Text;
+  private muteBtn!: Button;
+  /** 暂停菜单面板；为 null 表示没有打开 */
+  private pausePanel: Phaser.GameObjects.Container | null = null;
+  /** 正在打开的图鉴 */
+  private codex: { close: () => void } | null = null;
 
   constructor() {
     super('Game');
@@ -99,6 +104,8 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.menu = null;
     this.menuCell = null;
     this.menuKeys = {};
+    this.pausePanel = null;
+    this.codex = null;
     this.tweens.timeScale = 1;
     this.time.timeScale = 1;
 
@@ -108,6 +115,13 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.linkG = this.add.graphics().setDepth(9000);
     this.createHud();
     this.bindInput();
+    music.play('battle');
+    // 切到别的标签页时自动暂停，避免回来时已经漏了一堆怪
+    const onHidden = () => {
+      if (!this.paused && !this.isOver()) this.togglePause();
+    };
+    this.game.events.on('hidden', onHidden);
+    this.events.once('shutdown', () => this.game.events.off('hidden', onHidden));
     this.banner(`第${this.level.id}关「${this.level.name}」：${this.level.subtitle}`, 0x2a6fb8, 3500);
     const unlock = this.level.unlock;
     if (unlock) this.banner(`新塔解锁「${TOWERS[unlock].name}」：${TOWERS[unlock].desc}`, 0xd0782a, 5000, unlock);
@@ -155,14 +169,12 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.speedBtn = makeButton(this, WIDTH - 160, 32, 70, 40, '1x', 0x4f7fd1, () => this.toggleSpeed());
     this.pauseBtn = makeButton(this, WIDTH - 70, 32, 90, 40, '暂停', 0xe08a2e, () => this.togglePause());
     const muteBtn = makeButton(this, WIDTH - 384, 32, 48, 40, sfx.muted ? '🔇' : '🔊', 0x5c6b85, () => muteBtn.setLabel(sfx.toggleMute() ? '🔇' : '🔊'), 18);
-    const menuBtn = makeButton(this, WIDTH - 436, 32, 48, 40, '☰', 0x5c6b85, () => this.scene.start('Menu'), 20);
+    this.muteBtn = muteBtn;
+    // ☰ 打开暂停菜单（里面有图鉴、重开、返回选关）
+    const menuBtn = makeButton(this, WIDTH - 436, 32, 48, 40, '☰', 0x5c6b85, () => {
+      if (!this.paused) this.togglePause();
+    }, 20);
     for (const b of [this.startBtn, this.speedBtn, this.pauseBtn, muteBtn, menuBtn]) b.container.setDepth(20002);
-
-    this.pauseLabel = this.add
-      .text(WIDTH / 2, HEIGHT / 2, '已暂停', { fontFamily: FONT, fontSize: '48px', color: '#ffffff', fontStyle: 'bold', stroke: '#2c3a52', strokeThickness: 8 })
-      .setOrigin(0.5)
-      .setDepth(30000)
-      .setVisible(false);
     this.refreshHud();
   }
 
@@ -193,7 +205,65 @@ export class GameScene extends Phaser.Scene implements Battle {
       this.time.paused = false;
     }
     this.pauseBtn.setLabel(this.paused ? '继续' : '暂停');
-    this.pauseLabel.setVisible(this.paused);
+    music.setDuck(this.paused);
+    if (this.paused) this.openPausePanel();
+    else {
+      this.codex?.close();
+      this.pausePanel?.destroy();
+      this.pausePanel = null;
+    }
+  }
+
+  /** 暂停菜单：继续 / 重新开始 / 图鉴 / 音乐音效开关 / 返回选关 */
+  private openPausePanel() {
+    this.closeMenu();
+    const cx = WIDTH / 2;
+    const cy = HEIGHT / 2 + 20;
+    const w = 340;
+    const h = 400;
+    const shade = this.add.rectangle(cx, HEIGHT / 2, WIDTH, HEIGHT, 0x000000, 0.45).setInteractive();
+    const g = this.add.graphics();
+    g.fillStyle(0x000000, 0.2).fillRoundedRect(cx - w / 2, cy - h / 2 + 6, w, h, 26);
+    g.fillStyle(0xfffaf0, 1).fillRoundedRect(cx - w / 2, cy - h / 2, w, h, 26);
+    g.lineStyle(5, 0xe08a2e, 1).strokeRoundedRect(cx - w / 2, cy - h / 2, w, h, 26);
+    const title = this.add
+      .text(cx, cy - h / 2 + 40, '已暂停', { fontFamily: FONT, fontSize: '30px', fontStyle: 'bold', color: '#c66a1e' })
+      .setOrigin(0.5);
+    const tip = this.add
+      .text(cx, cy + h / 2 - 22, '空格 / P / Esc 继续', { fontFamily: FONT, fontSize: '12px', color: '#a08a5a' })
+      .setOrigin(0.5);
+    const panel = this.add.container(0, 0, [shade, g, title, tip]).setDepth(30000);
+
+    const onOff = (on: boolean) => (on ? '开' : '关');
+    const rows: [string, number, () => void][] = [
+      ['▶ 继续', 0x3cb35a, () => this.togglePause()],
+      ['↻ 重新开始', 0x4f7fd1, () => this.scene.restart()],
+      ['📖 怪物图鉴', 0x6a55b5, () => {
+        panel.setVisible(false);
+        this.codex = openCodex(this, () => {
+          this.codex = null;
+          panel.setVisible(true);
+        });
+      }],
+    ];
+    rows.forEach(([label, color, fn], i) => {
+      panel.add(makeButton(this, cx, cy - h / 2 + 100 + i * 54, 220, 44, label, color, fn).container);
+    });
+    // 音乐、音效并排的小开关
+    const ty = cy - h / 2 + 100 + 3 * 54;
+    const musicBtn = makeButton(this, cx - 58, ty, 104, 40, `♪ 音乐 ${onOff(music.enabled)}`, 0x5c6b85, () => {
+      musicBtn.setLabel(`♪ 音乐 ${onOff(music.toggle())}`);
+    }, 15);
+    const sfxBtn = makeButton(this, cx + 58, ty, 104, 40, `🔊 音效 ${onOff(!sfx.muted)}`, 0x5c6b85, () => {
+      const muted = sfx.toggleMute();
+      sfxBtn.setLabel(`🔊 音效 ${onOff(!muted)}`);
+      this.muteBtn.setLabel(muted ? '🔇' : '🔊');
+    }, 15);
+    panel.add([musicBtn.container, sfxBtn.container]);
+    panel.add(makeButton(this, cx, ty + 60, 220, 44, '⌂ 返回选关', 0xe0533a, () => this.scene.start('Menu')).container);
+
+    // 暂停时补间动画全部冻结，面板直接显示
+    this.pausePanel = panel;
   }
 
   // ───────────────────────── 输入与菜单 ─────────────────────────
@@ -233,6 +303,19 @@ export class GameScene extends Phaser.Scene implements Battle {
     if (this.isOver()) return;
     sfx.unlock();
     const k = ev.key.toLowerCase();
+    if (this.codex) {
+      if (k === 'escape') this.codex.close();
+      return;
+    }
+    if (this.paused && (k === 'escape' || k === ' ')) {
+      ev.preventDefault();
+      this.togglePause();
+      return;
+    }
+    if (k === 'escape' && !this.menu) {
+      this.togglePause();
+      return;
+    }
     if (k === ' ') {
       ev.preventDefault();
       if (this.state === 'build' && !this.paused) this.startWave();
@@ -457,6 +540,7 @@ export class GameScene extends Phaser.Scene implements Battle {
     const track = this.tracks[Math.min(path, this.tracks.length - 1)];
     if (!this.seen.has(kind)) {
       this.seen.add(kind);
+      markSeen(kind);
       this.banner(`新干扰「${def.name}」：${def.intro}`, def.boss ? 0xc6331f : 0x6a55b5, 4500, kind);
     }
     const e = new Enemy(this, def, hpScale, track);
@@ -521,6 +605,8 @@ export class GameScene extends Phaser.Scene implements Battle {
       e.update(dt);
       if (e.def.boss) this.bossAbility(e, dt);
     }
+    // Boss 在场时切换成紧张的配乐
+    music.play(this.enemies.some((e) => e.def.boss && e.alive) ? 'boss' : 'battle');
     for (const t of this.towers.values()) t.update(dt);
     this.updateProjectiles(dt);
     this.drawLinks();
@@ -866,6 +952,7 @@ export class GameScene extends Phaser.Scene implements Battle {
 
   private finish(won: boolean) {
     this.state = won ? 'won' : 'lost';
+    music.stop();
     sfx.play(won ? 'win' : 'lose');
     this.closeMenu();
     this.hoverG.clear();

@@ -3,7 +3,7 @@ import { WIDTH, HEIGHT } from './config/map';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { MenuScene } from './scenes/MenuScene';
-import { sfx } from './audio';
+import { sfx, music } from './audio';
 import { RES, patchTextResolution } from './display';
 
 patchTextResolution();
@@ -22,6 +22,6 @@ const game = new Phaser.Game({
 
 // 开发调试用：方便在控制台检查游戏状态
 if (import.meta.env.DEV) {
-  Object.assign(window, { __game: game, __sfx: sfx });
+  Object.assign(window, { __game: game, __sfx: sfx, __music: music });
   void import('./dev/bot').then((m) => m.installBot(game));
 }

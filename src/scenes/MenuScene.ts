@@ -4,8 +4,9 @@ import { LEVELS, type LevelDef } from '../config/levels';
 import { TOWERS } from '../config/towers';
 import { drawLevelMap, placeProps } from '../mapRender';
 import { isUnlocked, starsOf, totalStars } from '../progress';
-import { FONT } from '../ui';
-import { sfx } from '../audio';
+import { FONT, makeButton } from '../ui';
+import { openCodex } from '../codex';
+import { sfx, music } from '../audio';
 import { RES, setupCamera } from '../display';
 
 const CARD_W = 314;
@@ -22,6 +23,7 @@ export class MenuScene extends Phaser.Scene {
   create() {
     setupCamera(this);
     this.input.on('pointerdown', () => sfx.unlock());
+    music.play('menu');
 
     const bg = this.add.graphics();
     bg.fillStyle(0xa8dc8f, 1).fillRect(0, 0, WIDTH, HEIGHT);
@@ -39,6 +41,15 @@ export class MenuScene extends Phaser.Scene {
     this.add
       .text(WIDTH / 2 + 20, 88, `IC Tower Defense    ★ ${totalStars()}/${LEVELS.length * 3}`, { fontFamily: FONT, fontSize: '17px', fontStyle: 'bold', color: '#2f6a3a' })
       .setOrigin(0.5);
+
+    // 右上角：图鉴、音乐开关
+    let codex: { close: () => void } | null = null;
+    makeButton(this, WIDTH - 90, 40, 130, 42, '📖 怪物图鉴', 0x6a55b5, () => {
+      codex = openCodex(this, () => (codex = null));
+    }, 16);
+    const onOff = (on: boolean) => (on ? '♪ 音乐 开' : '♪ 音乐 关');
+    const musicBtn = makeButton(this, WIDTH - 90, 92, 130, 38, onOff(music.enabled), 0x5c6b85, () => musicBtn.setLabel(onOff(music.toggle())), 15);
+    this.input.keyboard?.on('keydown-ESC', () => codex?.close());
 
     const gap = 18;
     const x0 = (WIDTH - (3 * CARD_W + 2 * gap)) / 2;
