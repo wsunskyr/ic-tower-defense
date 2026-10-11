@@ -68,7 +68,7 @@ await __bot.run(3)   // "L3 won ❤8/10 towers=10 lives/wave=[...]"
 
 手机：横屏游玩，竖屏会提示旋转；触屏建塔时第一次点按看说明，再点一次建造。
 
-部署：`npm run build` 生成的 `dist/` 是纯静态文件，资源用相对路径，可以直接放到任何静态托管（GitHub Pages、Vercel、Netlify 等）的任意子目录下。
+部署：推送到 `main` 后，GitHub Actions（`.github/workflows/deploy.yml`）自动打包并发布到 GitHub Pages：https://wsunskyr.github.io/ic-tower-defense/ 。打包结果用相对路径，也可以手动把 `dist/` 放到任何静态托管的任意子目录下。
 
 提前开波：当前波的怪全部出场后，开始按钮变成「⏩ 提前」，立刻拿到本波的清波奖励，外加 15 + 场上怪数 × 3（最多 60）的提前奖励。
 
