@@ -48,6 +48,8 @@ export interface LevelDef {
   challenge?: Challenge;
   /** 无尽模式：waves 为空，波次由 endless.ts 实时生成 */
   endless?: boolean;
+  /** 无尽模式的怪物血量系数（双入口地图要分兵，血量打折） */
+  endlessHp?: number;
   startEnergy: number;
   lives: number;
   /** 每过一波，怪物血量增加的比例 */

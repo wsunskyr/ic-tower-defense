@@ -4,16 +4,15 @@ import type { EnemyKind } from './enemies';
 
 /** 无尽模式的三张地图，借用正式关卡的走线和配色 */
 export const ENDLESS: LevelDef[] = [
-  { src: 5, id: 101, name: '无尽 · 螺旋', subtitle: '一条长螺旋，适合堆范围伤害' },
-  { src: 7, id: 102, name: '无尽 · 汇流', subtitle: '两路汇合，守住公共主干' },
-  { src: 9, id: 103, name: '无尽 · 夹击', subtitle: '上下两路，最难的一张' },
+  { src: 5, id: 101, name: '无尽 · 螺旋', subtitle: '一条长螺旋，适合堆范围伤害', startEnergy: 450, endlessHp: 1 },
+  { src: 7, id: 102, name: '无尽 · 汇流', subtitle: '两路汇合，守住公共主干', startEnergy: 650, endlessHp: 0.6 },
+  { src: 9, id: 103, name: '无尽 · 夹击', subtitle: '上下两路，最难的一张', startEnergy: 650, endlessHp: 0.7 },
 ].map(({ src, ...rest }) => ({
   ...getLevel(src),
   ...rest,
   towers: ALL_TOWERS,
   unlock: undefined,
   challenge: undefined,
-  startEnergy: 450,
   lives: 20,
   hpGrowth: 0,
   waves: [],
@@ -62,8 +61,10 @@ export function endlessWave(n: number): WaveDef {
     wave.push(g(p.kind, count, p.gap * dense, delay));
     delay += count * p.gap * dense * 0.5;
   }
+  // Boss：每 10 波一次，30 波起两只、60 波起三只（一下来太多会形成一堵墙）
   if (n % 10 === 0) {
-    for (let b = 0; b < n / 10; b++) wave.push(g('esd', 1, 0, 2 + b * 6));
+    const bosses = 1 + Math.floor(n / 30);
+    for (let b = 0; b < bosses; b++) wave.push(g('esd', 1, 0, 2 + b * 8));
   }
   return wave;
 }

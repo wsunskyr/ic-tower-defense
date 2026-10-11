@@ -223,7 +223,8 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.energyText.setText(`⚡ ${Math.floor(this.energy)}`);
     this.livesText.setText(`❤ ${this.lives}`);
     this.waveText.setText(`波次 ${this.waveIndex}/${this.level.endless ? '∞' : this.level.waves.length}`);
-    this.titleText.setText(this.level.endless ? `${this.level.name.replace('无尽 · ', '无尽·')}  ${this.score} 分` : `第${this.level.id}关 ${this.level.name}`);
+    // 无尽模式标题栏只放分数，地图名在开局横幅里已经展示过
+    this.titleText.setText(this.level.endless ? `🏆 ${this.score} 分` : `第${this.level.id}关 ${this.level.name}`);
     this.refreshStartBtn();
   }
 
@@ -422,7 +423,8 @@ export class GameScene extends Phaser.Scene implements Battle {
     const above = center.y - CELL / 2 - panelH - 8 > MAP_Y;
     const py = above ? center.y - CELL / 2 - panelH / 2 - 8 : center.y + CELL / 2 + panelH / 2 + 8;
 
-    const container = this.add.container(0, 0).setDepth(25000);
+    // 高于横幅（26000），开局提示不会挡住菜单
+    const container = this.add.container(0, 0).setDepth(26500);
     const g = this.add.graphics();
     g.fillStyle(0xffffff, 0.35).fillRoundedRect(c * CELL + 2, MAP_Y + r * CELL + 2, CELL - 4, CELL - 4, 12);
     g.lineStyle(3, 0xffffff, 1).strokeRoundedRect(c * CELL + 2, MAP_Y + r * CELL + 2, CELL - 4, CELL - 4, 12);
@@ -503,7 +505,8 @@ export class GameScene extends Phaser.Scene implements Battle {
   }
 
   private openTowerMenu(tower: Tower) {
-    const container = this.add.container(0, 0).setDepth(25000);
+    // 高于横幅（26000），开局提示不会挡住菜单
+    const container = this.add.container(0, 0).setDepth(26500);
     const s = tower.stats;
     const g = this.add.graphics();
     g.fillStyle(0xffffff, 0.12).fillCircle(tower.x, tower.y, s.range);
@@ -647,7 +650,9 @@ export class GameScene extends Phaser.Scene implements Battle {
   private spawn(kind: EnemyKind, path: number) {
     const def = ENEMIES[kind];
     // Boss 只吃一半的波次成长，否则后期 Boss 血量膨胀过快
-    const base = this.level.endless ? endlessHpScale(this.waveIndex) - 1 : this.level.hpGrowth * (this.waveIndex - 1);
+    const base = this.level.endless
+      ? endlessHpScale(this.waveIndex) * (this.level.endlessHp ?? 1) - 1
+      : this.level.hpGrowth * (this.waveIndex - 1);
     const hpScale = 1 + base * (def.boss ? 0.5 : 1);
     const track = this.tracks[Math.min(path, this.tracks.length - 1)];
     if (!this.seen.has(kind)) {
