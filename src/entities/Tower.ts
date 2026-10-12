@@ -54,6 +54,8 @@ export class Tower {
   invested: number;
   private cooldown = 0;
   private pulseClock = 0;
+  /** 升级变身剩余时间（秒）；结束后无论动画回调是否执行，都恢复正常颜色和大小 */
+  private morph = 0;
   stun = 0;
   /** 由附近 LDO 每帧写入：攻速 / 持续伤害加成、抵消静电瘫痪的比例 */
   boost = 0;
@@ -136,6 +138,7 @@ export class Tower {
     const sc = this.scale;
     scene.tweens.killTweensOf(this.sprite);
     this.sprite.setTintFill(0xffffff);
+    this.morph = 0.6;
     scene.tweens.add({
       targets: this.sprite,
       scaleX: sc * 0.6,
@@ -150,7 +153,7 @@ export class Tower {
         this.sprite.setScale(nsc * 1.35, nsc * 0.75);
         scene.tweens.add({ targets: this.sprite, scaleX: nsc, scaleY: nsc, duration: 380, ease: 'Elastic.Out', easeParams: [1.2, 0.5] });
         scene.time.delayedCall(90, () => {
-          if (this.sprite.active && this.stun <= 0) this.sprite.clearTint();
+          if (this.sprite.active) this.sprite.clearTint();
         });
       },
     });
@@ -267,13 +270,21 @@ export class Tower {
     const buffed = this.boost > 0 && this.stun <= 0;
     this.buffIcon.setVisible(buffed);
     if (buffed) this.buffIcon.setText(`⚡+${Math.round(this.boost * 100)}%`);
+    if (this.morph > 0) {
+      this.morph -= dt;
+      // 兜底：动画被打断（连续升级、暂停、倍速切换等）时，白光不会一直留着
+      if (this.morph <= 0) {
+        this.battle.stage.tweens.killTweensOf(this.sprite);
+        this.sprite.setTexture(towerTexture(this.kind, this.level)).setScale(this.scale).clearTint();
+      }
+    }
     if (this.stun > 0) {
       this.stun -= dt;
       this.sprite.setTint(0x888888);
       this.lockTarget = null;
       return;
     }
-    if (this.sprite.tintFill === false) this.sprite.clearTint();
+    if (this.morph <= 0 || this.sprite.tintFill === false) this.sprite.clearTint();
     this.sparkle(dt);
     const power = 1 + this.boost;
     this.cooldown -= dt * power;

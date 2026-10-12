@@ -115,6 +115,7 @@ export function installUiAudit(game: Phaser.Game) {
     // 横幅会定时消失，先清掉，单独测
     s.banners.forEach((b: any) => b.destroy());
     s.banners = [];
+    s.bannerQueue = [];
     return s;
   };
 

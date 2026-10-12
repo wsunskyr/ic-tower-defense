@@ -36,6 +36,17 @@ const TITLE_L = 268 + 150 + 8;
 const TITLE_R = WIDTH - 436 - 24 - 8;
 const BUILD_TIP = '选择一座防御塔（数字键快速建造）';
 
+interface BannerSpec {
+  text: string;
+  color: number;
+  /** 显示时长（真实秒） */
+  life: number;
+  icon?: string;
+  tag?: string;
+}
+
+const MAX_BANNERS = 2;
+
 export class GameScene extends Phaser.Scene implements Battle {
   // 战场状态（scene.restart 不会重新执行构造函数，因此在 create 里初始化）
   enemies: Enemy[] = [];
@@ -54,6 +65,8 @@ export class GameScene extends Phaser.Scene implements Battle {
   private waveClock = 0;
   private seen = new Set<EnemyKind>();
   private banners: Phaser.GameObjects.Container[] = [];
+  /** 屏幕上最多 2 条横幅，其余排队 */
+  private bannerQueue: BannerSpec[] = [];
   /** 顿帧剩余时间（真实秒），期间战斗逻辑暂停 */
   private hitstop = 0;
   private damageTexts = 0;
@@ -79,6 +92,8 @@ export class GameScene extends Phaser.Scene implements Battle {
   /** 正在打开的图鉴 */
   private codex: { close: () => void } | null = null;
   private menuKind: 'build' | 'tower' | null = null;
+  /** 菜单打开期间每帧调用：能量变化后按钮立刻变成可用/不可用 */
+  private menuRefresh: (() => void) | null = null;
   private tutorial: Tutorial | null = null;
   /** 无尽模式分数 */
   private score = 0;
@@ -137,6 +152,7 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.spawnQueue = [];
     this.seen = new Set();
     this.banners = [];
+    this.bannerQueue = [];
     this.hitstop = 0;
     this.damageTexts = 0;
     this.menu = null;
@@ -183,16 +199,16 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.events.once('shutdown', () => this.game.events.off('hidden', onHidden));
     if (this.level.endless) {
       const best = endlessBest(this.level.id);
-      this.banner(`${this.level.name}：怪物会越来越强，坚持得越久分数越高`, 0x2a6fb8, 4000);
-      if (best) this.banner(`最高纪录：第 ${best.wave} 波 · ${best.score} 分`, 0x6a55b5, 4000);
+      this.banner(`${this.level.name}：怪物会越来越强，坚持得越久分数越高`, 0x2a6fb8, 3000);
+      if (best) this.banner(`最高纪录：第 ${best.wave} 波 · ${best.score} 分`, 0x6a55b5, 2500);
     } else {
-      this.banner(`第${this.level.id}关「${this.level.name}」：${this.level.subtitle}`, 0x2a6fb8, 3500);
+      this.banner(`第${this.level.id}关「${this.level.name}」：${this.level.subtitle}`, 0x2a6fb8, 3000);
     }
     const unlock = this.level.unlock;
-    if (unlock) this.banner(`新塔解锁「${TOWERS[unlock].name}」：${TOWERS[unlock].desc}`, 0xd0782a, 5000, unlock);
+    if (unlock) this.banner(`新塔解锁「${TOWERS[unlock].name}」：${TOWERS[unlock].desc}`, 0xd0782a, 3500, unlock);
     const ch = this.level.challenge;
     if (ch && !(this.level.id === 1 && !tutorialDone())) {
-      this.banner(`可选挑战${hasBadge(this.level.id) ? '（已完成）' : ''}：${challengeText(ch)}`, 0x8a5a2a, 4500);
+      this.banner(`可选挑战${hasBadge(this.level.id) ? '（已完成）' : ''}：${challengeText(ch)}`, 0x8a5a2a, 3000);
     }
     // 新玩法提示：每个存档只提示一次，等开局横幅播完再出
     if (!(this.level.id === 1 && !tutorialDone())) {
@@ -200,10 +216,10 @@ export class GameScene extends Phaser.Scene implements Battle {
         ['tip-obstacle', '新玩法：点击地图上的元件标记它，波次中射程内的塔会优先拆掉它，换能量和空位'],
         ['tip-skill', '底部有三个技能：Q 全场减速、W 全场定身、E 用 1 点生命换能量'],
       ];
-      tips.forEach(([key, text], i) => {
+      tips.forEach(([key, text]) => {
         if (hasSeen(key)) return;
         markSeen(key);
-        this.time.delayedCall(4200 + i * 300, () => this.banner(text, 0x2f8f5a, 6000));
+        this.banner(text, 0x2f8f5a, 4500);
       });
     }
     if (this.level.id === 1 && !tutorialDone()) {
@@ -489,6 +505,7 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.menuCell = null;
     this.menuKeys = {};
     this.menuKind = null;
+    this.menuRefresh = null;
   }
 
   private openBuildMenu(c: number, r: number) {
@@ -542,10 +559,11 @@ export class GameScene extends Phaser.Scene implements Battle {
 
     let touchPick: TowerKind | null = null;
     const picks: Phaser.GameObjects.Arc[] = [];
+    const paints: (() => void)[] = [];
     kinds.forEach((kind, i) => {
       const def = TOWERS[kind];
       const cost = def.levels[0].cost;
-      const afford = this.energy >= cost;
+      let afford = this.energy >= cost;
       const x = px - ((n - 1) * gap) / 2 + i * gap;
       const y = py - 32;
       const bg = this.add.circle(x, y, 28, afford ? 0xe9f6ff : 0xdddddd).setStrokeStyle(3, afford ? 0x5fb0ff : 0xaaaaaa);
@@ -554,10 +572,20 @@ export class GameScene extends Phaser.Scene implements Battle {
       const price = this.add
         .text(x, y + 38, `⚡${cost}`, { fontFamily: FONT, fontSize: '14px', fontStyle: 'bold', color: afford ? '#c98a00' : '#999999' })
         .setOrigin(0.5);
-      if (!afford) {
-        icon.setAlpha(0.4);
-      }
-      bg.setInteractive({ useHandCursor: afford });
+      bg.setInteractive();
+      const paint = () => {
+        bg.setFillStyle(afford ? 0xe9f6ff : 0xdddddd);
+        if (touchPick !== kind) bg.setStrokeStyle(3, afford ? 0x5fb0ff : 0xaaaaaa);
+        price.setColor(afford ? '#c98a00' : '#999999');
+        icon.setAlpha(afford ? 1 : 0.4);
+        if (bg.input) bg.input.cursor = afford ? 'pointer' : 'default';
+      };
+      paint();
+      paints.push(() => {
+        if (afford === this.energy >= cost) return;
+        afford = !afford;
+        paint();
+      });
       const preview = () => {
         setInfo(`${def.name}：${def.desc}`);
         setStat(statText(kind, 0));
@@ -584,6 +612,7 @@ export class GameScene extends Phaser.Scene implements Battle {
       container.add([bg, icon, price, hotkey]);
     });
 
+    this.menuRefresh = () => paints.forEach((f) => f());
     container.setScale(0.8).setAlpha(0);
     this.tweens.add({ targets: container, scale: 1, alpha: 1, duration: 140, ease: 'Back.Out' });
     // 以面板中心缩放
@@ -644,7 +673,13 @@ export class GameScene extends Phaser.Scene implements Battle {
       };
       const b = makeButton(this, bx, upY, 120, 36, `升级 ⚡${cost} [U]`, 0x3cb35a, doUpgrade, 14);
       this.menuKeys.upgrade = doUpgrade;
-      b.setEnabled(this.energy >= cost);
+      let canUp = this.energy >= cost;
+      b.setEnabled(canUp);
+      this.menuRefresh = () => {
+        if (canUp === this.energy >= cost) return;
+        canUp = !canUp;
+        b.setEnabled(canUp);
+      };
       container.add(b.container);
       // 下一级造型预览
       // 预览放在按钮旁边，箭头和按钮之间留出空隙
@@ -797,7 +832,7 @@ export class GameScene extends Phaser.Scene implements Battle {
       const tower = new Tower(this, gift, o.def.c, o.def.r, o.x, o.y);
       this.towers.set(o.key, tower);
       this.giftTowers.add(tower);
-      this.banner(`拆出一座「${TOWERS[gift].name}」！`, 0xd0782a, 3000, gift);
+      this.banner(`拆出一座「${TOWERS[gift].name}」！`, 0xd0782a, 2500, gift);
       sfx.play('upgrade');
     }
     this.refreshHud();
@@ -822,7 +857,7 @@ export class GameScene extends Phaser.Scene implements Battle {
   private failChallenge() {
     if (!this.challengeOk || !this.level.challenge) return;
     this.challengeOk = false;
-    if (!hasBadge(this.level.id)) this.banner(`挑战失败：${challengeText(this.level.challenge)}（仍可正常通关）`, 0x8a5a2a, 3500);
+    if (!hasBadge(this.level.id)) this.banner(`挑战失败：${challengeText(this.level.challenge)}（仍可正常通关）`, 0x8a5a2a, 3000);
   }
 
   private sell(tower: Tower) {
@@ -871,6 +906,9 @@ export class GameScene extends Phaser.Scene implements Battle {
     this.banner(
       last ? `最终波！第 ${this.waveIndex} 波来袭` : boss && this.level.endless ? `第 ${this.waveIndex} 波：BOSS 来袭！` : `第 ${this.waveIndex} 波来袭！`,
       last || boss ? 0xc6331f : 0xe08a2e,
+      1600,
+      undefined,
+      'wave',
     );
   }
 
@@ -885,7 +923,7 @@ export class GameScene extends Phaser.Scene implements Battle {
     if (!this.seen.has(kind)) {
       this.seen.add(kind);
       markSeen(kind);
-      this.banner(`新干扰「${def.name}」：${def.intro}`, def.boss ? 0xc6331f : 0x6a55b5, 4500, kind);
+      this.banner(`新干扰「${def.name}」：${def.intro}`, def.boss ? 0xc6331f : 0x6a55b5, 3200, kind);
     }
     const e = new Enemy(this, def, hpScale, track);
     this.enemies.push(e);
@@ -911,14 +949,16 @@ export class GameScene extends Phaser.Scene implements Battle {
     }
     this.energy += bonus;
     sfx.play('waveClear');
-    this.banner(`第 ${this.waveIndex} 波清除！奖励 ⚡${bonus}`, 0x3cb35a);
+    this.banner(`第 ${this.waveIndex} 波清除！奖励 ⚡${bonus}`, 0x3cb35a, 1600, undefined, 'wave');
     this.refreshHud();
   }
 
   // ───────────────────────── 主循环 ─────────────────────────
 
   update(_time: number, delta: number) {
+    if (!this.paused) this.tickBanners(delta / 1000);
     if (this.paused || this.isOver()) return;
+    this.menuRefresh?.();
     this.tutorial?.update(delta / 1000);
     if (this.hitstop > 0) {
       this.hitstop -= delta / 1000;
@@ -1334,38 +1374,76 @@ export class GameScene extends Phaser.Scene implements Battle {
   }
 
   /** icon 是贴图 key：新怪物或新解锁的塔 */
-  private banner(text: string, color: number, duration = 2200, icon?: string) {
-    // 最多同时显示 3 条，挤掉最早的
-    while (this.banners.length >= 3) this.banners.shift()!.destroy();
-    this.banners.forEach((b, i) => b.setY(MAP_Y + 46 + i * 52));
-    const y = MAP_Y + 40 + this.banners.length * 52;
-    const label = this.add.text(icon ? 22 : 0, 0, text, { fontFamily: FONT, fontSize: '18px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5);
+  /**
+   * 地图顶部的提示横幅。同时最多 2 条，多的排队；按真实时间计时（不受倍速影响），点一下可以关掉。
+   * 同一 tag 的新横幅会顶掉旧的（例如提前开波时「第 5 波」直接换成「第 6 波」）。
+   */
+  private banner(text: string, color: number, duration = 2200, icon?: string, tag?: string) {
+    const spec: BannerSpec = { text, color, life: duration / 1000, icon, tag };
+    if (tag) {
+      this.bannerQueue = this.bannerQueue.filter((b) => b.tag !== tag);
+      this.banners.filter((b) => b.getData('tag') === tag).forEach((b) => this.dismissBanner(b, true));
+      // 波次横幅是即时信息，不排队
+      while (this.banners.length >= MAX_BANNERS) this.dismissBanner(this.banners[0], true);
+      this.showBanner(spec);
+      return;
+    }
+    this.bannerQueue.push(spec);
+    this.pumpBanners();
+  }
+
+  private pumpBanners() {
+    while (this.banners.length < MAX_BANNERS && this.bannerQueue.length > 0) this.showBanner(this.bannerQueue.shift()!);
+  }
+
+  private bannerY(i: number) {
+    return MAP_Y + 26 + i * 40;
+  }
+
+  private showBanner({ text, color, life, icon, tag }: BannerSpec) {
+    const label = this.add.text(icon ? 16 : 0, 0, text, { fontFamily: FONT, fontSize: '15px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5);
     // 横幅最宽到画面两侧各留 20，文字太长就缩小
-    const extra = icon ? 84 : 48;
+    const extra = icon ? 66 : 40;
     fit(label, WIDTH - 40 - extra);
     const w = label.displayWidth + extra;
+    const h = 32;
     const g = this.add.graphics();
-    g.fillStyle(0x000000, 0.2).fillRoundedRect(-w / 2, -19 + 3, w, 38, 19);
-    g.fillStyle(color, 0.95).fillRoundedRect(-w / 2, -19, w, 38, 19);
+    g.fillStyle(0x000000, 0.18).fillRoundedRect(-w / 2, -h / 2 + 3, w, h, h / 2);
+    g.fillStyle(color, 0.88).fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
     const parts: Phaser.GameObjects.GameObject[] = [g, label];
     if (icon) {
-      const img = this.add.image(-w / 2 + 30, 0, icon);
-      img.setScale(32 / Math.max(img.width, img.height));
+      const img = this.add.image(-w / 2 + 22, 0, icon);
+      img.setScale(26 / Math.max(img.width, img.height));
       parts.push(img);
     }
-    const c = this.add.container(WIDTH / 2, y, parts).setDepth(26000).setAlpha(0);
+    const y = this.bannerY(this.banners.length);
+    const c = this.add.container(WIDTH / 2, y - 6, parts).setDepth(26000).setAlpha(0);
+    c.setData({ life, tag });
+    c.setSize(w, h).setInteractive({ useHandCursor: true });
+    c.on('pointerdown', () => this.dismissBanner(c));
     this.banners.push(c);
-    this.tweens.add({ targets: c, alpha: 1, y: y + 6, duration: 200 });
-    this.time.delayedCall(duration, () => {
-      if (!c.active) return;
-      this.tweens.add({
-        targets: c, alpha: 0, duration: 300,
-        onComplete: () => {
-          this.banners = this.banners.filter((b) => b !== c);
-          c.destroy();
-        },
-      });
-    });
+    this.tweens.add({ targets: c, alpha: 1, y, duration: 180 });
+  }
+
+  /** quick：被顶掉时直接消失，不占位置 */
+  private dismissBanner(c: Phaser.GameObjects.Container, quick = false) {
+    if (!this.banners.includes(c)) return;
+    this.banners = this.banners.filter((b) => b !== c);
+    c.disableInteractive();
+    this.tweens.killTweensOf(c);
+    if (quick) c.destroy();
+    else this.tweens.add({ targets: c, alpha: 0, duration: 200, onComplete: () => c.destroy() });
+    // 下面的横幅往上补位
+    this.banners.forEach((b, i) => this.tweens.add({ targets: b, y: this.bannerY(i), alpha: 1, duration: 180 }));
+    this.pumpBanners();
+  }
+
+  private tickBanners(dt: number) {
+    for (const b of [...this.banners]) {
+      const life = (b.getData('life') as number) - dt;
+      b.setData('life', life);
+      if (life <= 0) this.dismissBanner(b);
+    }
   }
 
   /**
