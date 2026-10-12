@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { MAP_Y, WIDTH, HEIGHT, cellCenter } from '../config/map';
+import { MAP_Y, MAP_BOTTOM, WIDTH, HEIGHT, cellCenter } from '../config/map';
 import { LEVELS, challengeText, type LevelDef } from '../config/levels';
 import { ENDLESS } from '../config/endless';
 import { TOWERS } from '../config/towers';
@@ -14,7 +14,7 @@ const CARD_W = 314;
 const CARD_H = 142;
 const MINI_W = 160;
 const MINI_SCALE = MINI_W / WIDTH;
-const MINI_H = (HEIGHT - MAP_Y) * MINI_SCALE;
+const MINI_H = (MAP_BOTTOM - MAP_Y) * MINI_SCALE;
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -73,7 +73,7 @@ export class MenuScene extends Phaser.Scene {
     LEVELS.forEach((level, i) => {
       const col = i % 3;
       const row = Math.floor(i / 3);
-      this.card(level, x0 + col * (CARD_W + gap), 118 + row * (CARD_H + 16));
+      this.card(level, x0 + col * (CARD_W + gap), 136 + row * (CARD_H + 18));
     });
   }
 

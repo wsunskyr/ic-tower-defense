@@ -11,7 +11,7 @@ patchTextResolution();
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  // 按 RES 倍分辨率渲染，各场景的相机再缩放回 1024×640 的世界坐标
+  // 按 RES 倍分辨率渲染，各场景的相机再缩放回 1024×696 的世界坐标
   width: WIDTH * RES,
   height: HEIGHT * RES,
   backgroundColor: '#2d4a22',

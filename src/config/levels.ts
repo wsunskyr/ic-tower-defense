@@ -1,8 +1,31 @@
 import { TOWERS, type TowerKind } from './towers';
-import type { Waypoints } from './map';
+import { COLS, ROWS, cellKey, pathCells, type Waypoints } from './map';
 import { g, type WaveDef } from './waves';
 
 export type PropKind = 'cap' | 'res' | 'ram' | 'ind';
+
+export interface PropDef {
+  kind: PropKind;
+  c: number;
+  r: number;
+  /** 清除后免费送一座 1 级塔 */
+  gift?: TowerKind;
+}
+
+/** 障碍物的血量和清除奖励：元件越大越难拆、给的能量越多 */
+const PROP_BASE: Record<PropKind, { hp: number; reward: number; name: string }> = {
+  res: { hp: 220, reward: 25, name: '电阻' },
+  cap: { hp: 360, reward: 40, name: '电容' },
+  ind: { hp: 520, reward: 60, name: '电感' },
+  ram: { hp: 800, reward: 90, name: '内存芯片' },
+};
+
+/** 后面的关卡障碍物更结实；无尽地图按第 9 关算 */
+export function propStats(kind: PropKind, levelId: number) {
+  const b = PROP_BASE[kind];
+  const n = Math.min(levelId, 9);
+  return { name: b.name, hp: Math.round(b.hp * (1 + 0.15 * (n - 1))), reward: b.reward };
+}
 
 export interface Theme {
   ground: number;
@@ -40,8 +63,8 @@ export interface LevelDef {
   theme: Theme;
   /** 所有路径的终点必须相同（芯片核心） */
   paths: Waypoints[];
-  /** 不能建塔的元件障碍物 */
-  props: { kind: PropKind; c: number; r: number }[];
+  /** 元件障碍物：占着格子不能建塔，标记后让塔拆掉，可以拿到能量 */
+  props: PropDef[];
   towers: TowerKind[];
   /** 本关新解锁的塔，开局时提示 */
   unlock?: TowerKind;
@@ -231,7 +254,7 @@ export const LEVELS: LevelDef[] = [
     challenge: { kind: 'earlyCalls', n: 4 },
     startEnergy: 440,
     lives: 10,
-    hpGrowth: 0.15,
+    hpGrowth: 0.18,
     waves: [
       [g('thermal', 12, 0.6, 0, 0), g('thermal', 8, 0.7, 2, 1)],
       [g('crosstalk', 6, 1.4), g('glitch', 10, 0.5, 3)],
@@ -285,7 +308,7 @@ export const LEVELS: LevelDef[] = [
     challenge: { kind: 'noTower', tower: 'pll' },
     startEnergy: 520,
     lives: 10,
-    hpGrowth: 0.12,
+    hpGrowth: 0.15,
     waves: [
       [g('thermal', 16, 0.5)],
       [g('glitch', 12, 0.5), g('jitter', 6, 0.8, 3)],
@@ -302,6 +325,53 @@ export const LEVELS: LevelDef[] = [
     ],
   },
 ];
+
+/** 新手引导要用到的格子，第 1 关不能放障碍物 */
+const TUTORIAL_CELLS = ['5,3', '3,3'];
+
+/**
+ * 每关再撒一些小元件（固定种子，每次一样）：大部分挡在走线旁边的好位置上，
+ * 拆掉才能在那里建塔；除第 1 关外，其中一个内存芯片里藏着一座塔。
+ */
+function addClutter(level: LevelDef) {
+  let seed = level.id * 7919;
+  const rand = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  const path = pathCells(level.paths);
+  const taken = new Set([...path, ...level.props.map((p) => cellKey(p.c, p.r))]);
+  if (level.id === 1) TUTORIAL_CELLS.forEach((k) => taken.add(k));
+  const near: [number, number][] = [];
+  const far: [number, number][] = [];
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      if (taken.has(cellKey(c, r))) continue;
+      let adj = false;
+      for (let dc = -1; dc <= 1; dc++) for (let dr = -1; dr <= 1; dr++) if (path.has(cellKey(c + dc, r + dr))) adj = true;
+      (adj ? near : far).push([c, r]);
+    }
+  }
+  const pick = (list: [number, number][]) => list.splice(Math.floor(rand() * list.length), 1)[0];
+  const kinds: PropKind[] = ['res', 'res', 'cap', 'cap', 'ind', 'ram'];
+  const nNear = level.id === 1 ? 3 : 4;
+  const added: PropDef[] = [];
+  for (let i = 0; i < nNear + 2; i++) {
+    const cell = pick(i < nNear ? near : far);
+    if (!cell) continue;
+    added.push({ kind: kinds[Math.floor(rand() * kinds.length)], c: cell[0], r: cell[1] });
+  }
+  if (level.id > 1 && added.length) {
+    // 礼物塔不送本关挑战禁用的塔
+    const banned = level.challenge?.kind === 'noTower' ? level.challenge.tower : null;
+    const choices = level.towers.filter((t) => t !== banned);
+    const box = added[added.length - 1];
+    box.kind = 'ram';
+    box.gift = choices[Math.floor(rand() * choices.length)];
+  }
+  level.props.push(...added);
+}
+LEVELS.forEach(addClutter);
 
 export const getLevel = (id: number) => LEVELS.find((l) => l.id === id) ?? LEVELS[0];
 

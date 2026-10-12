@@ -38,24 +38,48 @@ export function installBot(game: Phaser.Game) {
     } catch {
       /* 忽略 */
     }
-    const active = game.scene.getScenes(true)[0];
-    active.scene.start('Game', { levelId: id });
+    // 页面在后台时 rAF 停了，场景可能还没启动，直接停掉当前场景再开关卡
+    for (const sc of game.scene.getScenes(true)) game.scene.stop(sc.scene.key);
+    game.scene.start('Game', { levelId: id });
     for (let i = 0; i < 5; i++) frame();
     const s = game.scene.getScene('Game') as any;
     s.toggleSpeed();
 
-    const blocked = blockedCells(L);
     // 每条路径分别计数：多条路径共用的走线格子权重更高（所有怪都会经过）
     const path = L.paths.flatMap((p) => [...pathCells([p])].map((k) => k.split(',').map(Number)));
-    const cands: { c: number; r: number; cov: number }[] = [];
-    for (let c = 0; c < COLS; c++) {
-      for (let r = 0; r < ROWS; r++) {
-        if (blocked.has(cellKey(c, r))) continue;
-        const cov = path.filter(([pc, pr]) => (pc - c) ** 2 + (pr - r) ** 2 <= 2.3 ** 2).length;
-        cands.push({ c, r, cov });
+    const pathKeys = pathCells(L.paths);
+    const coverage = (c: number, r: number) => path.filter(([pc, pr]) => (pc - c) ** 2 + (pr - r) ** 2 <= 2.3 ** 2).length;
+    /** 当前能建塔的格子，按覆盖走线多少排序；障碍物拆掉后会多出来 */
+    const freeCells = () => {
+      const list: { c: number; r: number; cov: number }[] = [];
+      for (let c = 0; c < COLS; c++) {
+        for (let r = 0; r < ROWS; r++) {
+          const k = cellKey(c, r);
+          if (s.blocked.has(k) || s.towers.has(k)) continue;
+          list.push({ c, r, cov: coverage(c, r) });
+        }
       }
-    }
-    cands.sort((a, b) => b.cov - a.cov);
+      return list.sort((a, b) => b.cov - a.cov);
+    };
+    void blockedCells;
+    // 像玩家一样：标记挡住好位置的障碍物（射程内有塔才标），危急时放技能
+    const tactics = () => {
+      const marked = s.marked;
+      // 怪多的时候先打怪：取消标记；场上清闲时再拆障碍物
+      const busy = s.enemies.filter((e: any) => e.alive && e.dist > 0).length;
+      if (marked && marked.alive && busy > 4) s.toggleFocus(marked);
+      else if (busy <= 2 && (!marked || !marked.alive)) {
+        const towers = [...s.towers.values()];
+        const target = [...s.obstacles.values()]
+          .filter((o: any) => !pathKeys.has(o.key) && towers.some((t: any) => t.inRange(o)))
+          .sort((a: any, b: any) => coverage(b.def.c, b.def.r) - coverage(a.def.c, a.def.r) || a.hp - b.hp)[0];
+        if (target) s.toggleFocus(target);
+      }
+      if (s.state !== 'wave') return;
+      const deep = s.enemies.some((e: any) => e.alive && e.dist > e.track?.total * 0.75);
+      if (deep) s.bar.use('fan');
+      if (s.enemies.some((e: any) => e.alive && e.def.boss)) s.bar.use('reset');
+    };
     const order = PATTERN.filter((k) => L.towers.includes(k));
     // 玩家会马上试用本关新解锁的塔：放到第 3 座
     if (L.unlock) order.splice(2, 0, L.unlock);
@@ -66,11 +90,12 @@ export function installBot(game: Phaser.Game) {
         const kind = order[bi % order.length];
         const cost = TOWERS[kind].levels[0].cost;
         const ups = [...s.towers.values()].filter((x: any) => !x.maxed).sort((a: any, b: any) => a.upgradeCost - b.upgradeCost);
-        const canBuild = s.towers.size < cap && bi < cands.length;
+        const cands = freeCells();
+        const canBuild = s.towers.size < cap && cands.length > 0;
         const preferUp = s.towers.size >= 8 && ups.length > 0 && ups[0].upgradeCost <= cost;
         if (canBuild && !preferUp) {
           if (s.energy >= cost) {
-            s.build(kind, cands[bi].c, cands[bi].r);
+            s.build(kind, cands[0].c, cands[0].r);
             bi++;
             continue;
           }
@@ -95,7 +120,10 @@ export function installBot(game: Phaser.Game) {
         // 标签页隐藏时游戏会自动暂停，测试时直接恢复
         if (s.paused) s.togglePause();
         frame();
-        if (i % 20 === 0) spend();
+        if (i % 20 === 0) {
+          spend();
+          tactics();
+        }
         // 定期让出主线程；用 MessageChannel 而不是 setTimeout，后台标签页里不会被节流
         if (i % 200 === 0) await yieldToBrowser();
       }

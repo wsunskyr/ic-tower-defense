@@ -169,6 +169,40 @@ export function installUiAudit(game: Phaser.Game) {
       frame(1);
       check(`${tag} HUD`);
       s.waveIndex = 0;
+      // 底部工具栏：技能说明、每一波的预告（不能伸到技能按钮上）
+      const bar = s.bar;
+      for (const b of bar.buttons) {
+        b.container.list[b.container.list.length - 1].emit('pointerover');
+        check(`${tag} 技能说明 ${b.def.id}`);
+        b.container.list[b.container.list.length - 1].emit('pointerout');
+      }
+      // 冷却中的样子（最长的倒计时）
+      for (const b of bar.buttons) {
+        b.remaining = b.def.cooldown;
+        bar.draw(b);
+      }
+      check(`${tag} 技能冷却`);
+      for (const b of bar.buttons) {
+        b.remaining = 0;
+        bar.draw(b);
+      }
+      const waves = level.endless ? 60 : level.waves.length;
+      for (let i = 0; i < waves; i++) {
+        s.waveIndex = i;
+        s.refreshHud();
+        const left = Math.min(...bar.preview.list.map((o: any) => o.getBounds().x));
+        const skillsRight = Math.max(...bar.buttons.map((b: any) => b.container.x + 75));
+        if (left < skillsRight + 8) issues.push(`[${tag} 第${i + 1}波预告] 预告伸到技能按钮上 left=${left.toFixed(0)}`);
+        check(`${tag} 第${i + 1}波预告`);
+      }
+      s.waveIndex = 0;
+      s.refreshHud();
+      // 每个障碍物的悬停说明
+      for (const o of s.obstacles.values()) {
+        s.showObstacleTip(o);
+        check(`${tag} 障碍物说明 ${o.key}`);
+      }
+      s.hoverTip.setVisible(false);
       // 建造菜单：四个角和中间，悬停每种塔、能量不足提示
       const cells = [[0, 0], [15, 0], [0, 8], [15, 8], [7, 4]];
       for (const [c, r] of cells) {
@@ -230,12 +264,31 @@ export function installUiAudit(game: Phaser.Game) {
       for (const k of Object.keys(ENEMIES)) {
         gameScene().banner(`新干扰「${(ENEMIES as any)[k].name}」：${(ENEMIES as any)[k].intro}`, 0x6a55b5, 4500, k);
       }
+      // 新玩法提示（开发模式下全部解锁，正常不会出现，这里手动放出来量一量）
+      gameScene().banner('新玩法：点击地图上的元件标记它，波次中射程内的塔会优先拆掉它，换能量和空位', 0x2f8f5a, 6000);
+      gameScene().banner('底部有三个技能：Q 全场减速、W 全场定身、E 用 1 点生命换能量', 0x2f8f5a, 6000);
       frame(2);
       check(`${tag} 怪物横幅`);
       // 结算：胜利（含挑战）、失败
       for (const won of level.endless ? [false] : [true, false]) {
         startLevel(level.id);
         const g = gameScene();
+        // 战报：塞 5 座塔和夸张的数字
+        g.energy = 99999;
+        let n = 0;
+        for (let c = 0; c < 16 && n < 5; c++) {
+          for (let r = 0; r < 9 && n < 5; r++) {
+            const k = `${c},${r}`;
+            if (g.blocked.has(k) || g.towers.has(k)) continue;
+            g.build(level.towers[n % level.towers.length], c, r);
+            const tw = g.towers.get(k);
+            tw.upgrade();
+            if (n === 0) g.giftTowers.add(tw);
+            g.record.set(tw, { damage: 1234567.8 / (n + 1), kills: 9999 });
+            if (n === 4) g.sell(tw);
+            n++;
+          }
+        }
         g.waveIndex = level.endless ? 123 : level.waves.length;
         g.score = 9999999;
         g.lives = won ? g.level.lives : 0;

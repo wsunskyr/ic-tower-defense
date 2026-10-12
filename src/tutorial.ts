@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { CELL, MAP_Y, WIDTH, HEIGHT, cellCenter } from './config/map';
+import { CELL, MAP_Y, MAP_BOTTOM, WIDTH, cellCenter } from './config/map';
 import { FONT, fit, makeButton } from './ui';
 import { finishTutorial } from './progress';
 
@@ -84,9 +84,9 @@ export class Tutorial {
       .setData('transient', true);
     this.bubble = scene.add.graphics();
     this.label = scene.add
-      .text(WIDTH / 2, HEIGHT - 44, '', { fontFamily: FONT, fontSize: '18px', fontStyle: 'bold', color: '#ffffff' })
+      .text(WIDTH / 2, MAP_BOTTOM - 44, '', { fontFamily: FONT, fontSize: '18px', fontStyle: 'bold', color: '#ffffff' })
       .setOrigin(0.5);
-    const skip = makeButton(scene, WIDTH - 70, HEIGHT - 44, 96, 32, '跳过引导', 0x5c6b85, () => this.finish(), 13);
+    const skip = makeButton(scene, WIDTH - 70, MAP_BOTTOM - 44, 96, 32, '跳过引导', 0x5c6b85, () => this.finish(), 13);
     this.layer = scene.add.container(0, 0, [this.frame, this.arrow, this.bubble, this.label, skip.container]).setDepth(27000);
   }
 
@@ -113,11 +113,11 @@ export class Tutorial {
     if (this.label.text !== text) {
       // 气泡居中，右边不能碰到“跳过引导”按钮（左边缘 WIDTH-118）
       const maxW = 2 * (WIDTH / 2 - 126) - 40;
-      fit(this.label.setText(text), maxW, { x: WIDTH / 2 - maxW / 2, y: HEIGHT - 66, w: maxW, h: 44 });
+      fit(this.label.setText(text), maxW, { x: WIDTH / 2 - maxW / 2, y: MAP_BOTTOM - 66, w: maxW, h: 44 });
       const w = this.label.displayWidth + 40;
       this.bubble.clear();
-      this.bubble.fillStyle(0x000000, 0.25).fillRoundedRect(WIDTH / 2 - w / 2, HEIGHT - 66 + 3, w, 44, 22);
-      this.bubble.fillStyle(0x2a6fb8, 0.96).fillRoundedRect(WIDTH / 2 - w / 2, HEIGHT - 66, w, 44, 22);
+      this.bubble.fillStyle(0x000000, 0.25).fillRoundedRect(WIDTH / 2 - w / 2, MAP_BOTTOM - 66 + 3, w, 44, 22);
+      this.bubble.fillStyle(0x2a6fb8, 0.96).fillRoundedRect(WIDTH / 2 - w / 2, MAP_BOTTOM - 66, w, 44, 22);
     }
 
     // 高亮框呼吸闪烁 + 上下跳动的箭头（用自己的时钟，不依赖补间动画，暂停时也正常）

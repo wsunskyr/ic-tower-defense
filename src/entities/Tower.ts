@@ -1,15 +1,21 @@
 import Phaser from 'phaser';
 import { TOWERS, SELL_RATE, LDO_PROTECT, type TowerDef, type TowerKind } from '../config/towers';
 import type { Enemy } from './Enemy';
+import type { Obstacle } from './Obstacle';
+
+/** 塔能攻击的对象：怪物，或者被玩家标记的障碍物 */
+export type Target = Enemy | Obstacle;
 import { sfx } from '../audio';
 
 /** 塔与战场交互所需的接口，由 GameScene 实现 */
 export interface Battle {
   readonly stage: Phaser.Scene;
   readonly enemies: Enemy[];
+  /** 玩家标记的障碍物，射程内的塔优先攻击它 */
+  readonly focus: Obstacle | null;
   /** from 有值表示一次离散命中（会闪白、显示伤害数字），否则是持续伤害 */
-  damage(e: Enemy, amount: number, from?: { x: number; y: number }, showNumber?: boolean): void;
-  fireProjectile(tower: Tower, target: Enemy): void;
+  damage(e: Target, amount: number, from?: { x: number; y: number }, showNumber?: boolean): void;
+  fireProjectile(tower: Tower, target: Target): void;
   ring(x: number, y: number, radius: number, color: number): void;
 }
 
@@ -53,7 +59,7 @@ export class Tower {
   boost = 0;
   protect = 0;
 
-  private lockTarget: Enemy | null = null;
+  private lockTarget: Target | null = null;
   private lockTime = 0;
 
   constructor(
@@ -198,13 +204,21 @@ export class Tower {
     scene.tweens.add({ targets: star, y: star.y - 22, alpha: 0, angle: 90, duration: 900, onComplete: () => star.destroy() });
   }
 
-  inRange(e: Enemy) {
+  inRange(e: Target) {
     const r = this.stats.range;
     return (e.x - this.x) ** 2 + (e.y - this.y) ** 2 <= r * r;
   }
 
-  /** 选走得最远的目标 */
-  private pickTarget(): Enemy | null {
+  /** 射程内被标记的障碍物 */
+  private get focusInRange() {
+    const f = this.battle.focus;
+    return f && f.alive && this.inRange(f) ? f : null;
+  }
+
+  /** 选走得最远的目标；有标记的障碍物时先打它 */
+  private pickTarget(): Target | null {
+    const f = this.focusInRange;
+    if (f) return f;
     let best: Enemy | null = null;
     for (const e of this.battle.enemies) {
       if (e.targetable && this.inRange(e) && (!best || e.dist > best.dist)) best = e;
@@ -280,7 +294,8 @@ export class Tower {
       }
       case 'osc': {
         if (this.cooldown > 0) break;
-        const hits = this.battle.enemies.filter((e) => e.targetable && this.inRange(e));
+        const hits: Target[] = this.battle.enemies.filter((e) => e.targetable && this.inRange(e));
+        if (this.focusInRange) hits.push(this.focusInRange);
         if (hits.length === 0) break;
         this.battle.ring(this.x, this.y, s.range, this.color);
         // 范围攻击只闪白，不弹伤害数字，避免满屏数字
@@ -296,6 +311,7 @@ export class Tower {
         for (const e of this.battle.enemies) {
           if (e.targetable && this.inRange(e)) this.battle.damage(e, s.damage * power * dt);
         }
+        if (this.focusInRange) this.battle.damage(this.focusInRange, s.damage * power * dt);
         break;
       }
       case 'radar': {
@@ -306,7 +322,8 @@ export class Tower {
       }
       case 'pll': {
         const t = this.lockTarget;
-        if (!t || !t.targetable || !this.inRange(t)) {
+        const f = this.focusInRange;
+        if (!t || !t.targetable || !this.inRange(t) || (f && t !== f)) {
           this.lockTarget = this.pickTarget();
           this.lockTime = 0;
           if (this.lockTarget) sfx.play('lock');
@@ -338,7 +355,9 @@ export class Tower {
   }
 
   /** 选当前血量最多的目标（比较器） */
-  private pickStrongest(): Enemy | null {
+  private pickStrongest(): Target | null {
+    const f = this.focusInRange;
+    if (f) return f;
     let best: Enemy | null = null;
     for (const e of this.battle.enemies) {
       if (e.targetable && this.inRange(e) && (!best || e.hp > best.hp)) best = e;
@@ -347,7 +366,7 @@ export class Tower {
   }
 
   /** 比较器判决：血量过半输出 1（暴击），否则输出 0（普通伤害）。瞬间命中，不会落空 */
-  private decide(t: Enemy) {
+  private decide(t: Target) {
     const s = this.stats;
     const high = t.hp >= t.maxHp * 0.5;
     const scene = this.battle.stage;
@@ -393,7 +412,7 @@ export class Tower {
     }
   }
 
-  private drawBeam(t: Enemy, charge: number) {
+  private drawBeam(t: Target, charge: number) {
     const color = Phaser.Display.Color.Interpolate.ColorWithColor(
       Phaser.Display.Color.ValueToColor(0xffd08a),
       Phaser.Display.Color.ValueToColor(this.color),

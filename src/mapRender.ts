@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { CELL, COLS, ROWS, MAP_Y, WIDTH, HEIGHT, cellCenter, cellKey, pathCells } from './config/map';
+import { CELL, COLS, ROWS, MAP_Y, MAP_BOTTOM, WIDTH, cellCenter, cellKey, pathCells } from './config/map';
 import type { LevelDef } from './config/levels';
 
 /** 不能建塔的格子：走线 + 障碍物 */
@@ -15,16 +15,16 @@ export function blockedCells(level: LevelDef): Set<string> {
  */
 export function drawLevelMap(g: Phaser.GameObjects.Graphics, level: LevelDef, detail = true) {
   const t = level.theme;
-  g.fillStyle(t.ground, 1).fillRect(0, MAP_Y, WIDTH, HEIGHT - MAP_Y);
+  g.fillStyle(t.ground, 1).fillRect(0, MAP_Y, WIDTH, MAP_BOTTOM - MAP_Y);
 
   const rnd = new Phaser.Math.RandomDataGenerator([`ic-td-${level.id}`]);
   for (let i = 0; i < 26; i++) {
-    g.fillStyle(t.blob, 0.8).fillEllipse(rnd.between(0, WIDTH), rnd.between(MAP_Y, HEIGHT), rnd.between(60, 140), rnd.between(30, 70));
+    g.fillStyle(t.blob, 0.8).fillEllipse(rnd.between(0, WIDTH), rnd.between(MAP_Y, MAP_BOTTOM), rnd.between(60, 140), rnd.between(30, 70));
   }
 
   if (detail) {
     for (let i = 0; i < 60; i++) {
-      g.fillStyle(rnd.pick([0xffffff, 0xffe066, 0xff9ec7]), 0.9).fillCircle(rnd.between(0, WIDTH), rnd.between(MAP_Y, HEIGHT), 2.5);
+      g.fillStyle(rnd.pick([0xffffff, 0xffe066, 0xff9ec7]), 0.9).fillCircle(rnd.between(0, WIDTH), rnd.between(MAP_Y, MAP_BOTTOM), 2.5);
     }
     const blocked = blockedCells(level);
     for (let c = 0; c < COLS; c++) {
@@ -71,7 +71,7 @@ export function drawLevelMap(g: Phaser.GameObjects.Graphics, level: LevelDef, de
     if (c < 0) rect = [2, p.y - 26, 30, 52];
     else if (c >= COLS) rect = [WIDTH - 32, p.y - 26, 30, 52];
     else if (r < 0) rect = [p.x - 26, MAP_Y + 2, 52, 30];
-    else rect = [p.x - 26, HEIGHT - 32, 52, 30];
+    else rect = [p.x - 26, MAP_BOTTOM - 32, 52, 30];
     g.fillStyle(0xc8a83c, 1).fillRoundedRect(...rect, 6);
     g.lineStyle(3, 0x8a6d12, 1).strokeRoundedRect(...rect, 6);
     if (detail) {

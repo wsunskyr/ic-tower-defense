@@ -4,7 +4,10 @@ export const ROWS = 9;
 /** 顶部 HUD 高度，地图从这里开始 */
 export const MAP_Y = 64;
 export const WIDTH = COLS * CELL;
-export const HEIGHT = MAP_Y + ROWS * CELL;
+/** 地图下边缘；下面是底部工具栏（技能、下一波预告） */
+export const MAP_BOTTOM = MAP_Y + ROWS * CELL;
+export const BAR_H = 56;
+export const HEIGHT = MAP_BOTTOM + BAR_H;
 
 /** 格子坐标的走线拐点；第一个点在地图外（入口），最后一个点是芯片核心 */
 export type Waypoints = [number, number][];
